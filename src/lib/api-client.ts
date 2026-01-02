@@ -24,7 +24,11 @@ export type HeatmapPoint = {
 };
 
 export type HeatmapResponse = {
+  year: number;
   fromDate: string;
+  toDate: string;
+  metric: "avg" | "efficiency" | "social" | "habits" | "habit";
+  habitId?: string;
   points: HeatmapPoint[];
 };
 

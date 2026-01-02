@@ -16,22 +16,39 @@ function getTzOffsetMinutesClient(): number {
   return -new Date().getTimezoneOffset();
 }
 
-function Heatmap({ points }: { points: { date: string; value: number }[] }) {
-  if (!points.length) {
-    return <div className="text-sm text-muted-foreground">Пока нет данных.</div>;
-  }
-
+function Heatmap({
+  year,
+  points,
+}: {
+  year: number;
+  points: { date: string; value: number }[];
+}) {
   const map = new Map(points.map((p) => [p.date, p.value]));
-  const start = new Date();
-  start.setUTCDate(start.getUTCDate() - 364);
+  const startIso = `${year}-01-01`;
+  const endIso = `${year}-12-31`;
 
-  const days: { date: string; value: number }[] = [];
-  for (let i = 0; i < 365; i++) {
-    const d = new Date(start);
-    d.setUTCDate(start.getUTCDate() + i);
+  const start = new Date(`${startIso}T00:00:00Z`);
+  const end = new Date(`${endIso}T00:00:00Z`);
+
+  const daysInYear: { date: string; value: number }[] = [];
+  for (let d = new Date(start); d <= end; ) {
     const iso = d.toISOString().slice(0, 10);
-    days.push({ date: iso, value: map.get(iso) ?? 0 });
+    daysInYear.push({ date: iso, value: map.get(iso) ?? 0 });
+    d = new Date(d);
+    d.setUTCDate(d.getUTCDate() + 1);
   }
+
+  const mondayIndex = (start.getUTCDay() + 6) % 7;
+  const padStart = Array.from({ length: mondayIndex }).map((_, i) => ({
+    key: `pad-s-${i}`,
+    value: 0,
+  }));
+
+  const padEndCount = (7 - ((padStart.length + daysInYear.length) % 7)) % 7;
+  const padEnd = Array.from({ length: padEndCount }).map((_, i) => ({
+    key: `pad-e-${i}`,
+    value: 0,
+  }));
 
   const color = (v: number) => {
     if (v <= 0) return "bg-muted/60";
@@ -45,12 +62,18 @@ function Heatmap({ points }: { points: { date: string; value: number }[] }) {
   return (
     <div className="overflow-x-auto">
       <div className="grid w-max grid-flow-col grid-rows-7 gap-1">
-        {days.map((d) => (
+        {padStart.map((p) => (
+          <div key={p.key} className={cn("h-3 w-3 rounded-sm", color(p.value))} />
+        ))}
+        {daysInYear.map((d) => (
           <div
             key={d.date}
             title={`${d.date}: ${d.value}`}
             className={cn("h-3 w-3 rounded-sm", color(d.value))}
           />
+        ))}
+        {padEnd.map((p) => (
+          <div key={p.key} className={cn("h-3 w-3 rounded-sm", color(p.value))} />
         ))}
       </div>
       <div className="mt-2 text-xs text-muted-foreground">
@@ -65,28 +88,64 @@ function getMockTelegramIdFromUrl(): string | null {
   return url.searchParams.get("mockTelegramId");
 }
 
-function useTelegramInitData(): string {
+function useTelegramInitData(): { initData: string; isTelegram: boolean } {
   const [initData, setInitData] = useState<string>("");
+  const [isTelegram, setIsTelegram] = useState(false);
 
   useEffect(() => {
-    const webApp = getTelegramWebApp();
-    if (webApp) {
-      webApp.ready();
-      webApp.expand();
-      webApp.setHeaderColor?.("#0b1220");
-      webApp.setBackgroundColor?.("#0b1220");
-      setInitData(webApp.initData ?? "");
-      return;
-    }
+    const url = new URL(window.location.href);
+    const fromQuery = url.searchParams.get("tgWebAppData") ?? "";
+    const fromHash = new URLSearchParams(url.hash.replace(/^#/, "")).get("tgWebAppData") ?? "";
 
-    setInitData("");
+    let attempt = 0;
+    const maxAttempts = 30;
+
+    const tick = () => {
+      attempt += 1;
+      const webApp = getTelegramWebApp();
+      if (webApp) {
+        setIsTelegram(true);
+        webApp.ready();
+        webApp.expand();
+        webApp.setHeaderColor?.("#0b1220");
+        webApp.setBackgroundColor?.("#0b1220");
+        setInitData(webApp.initData || fromQuery || fromHash || "");
+        return;
+      }
+
+      if (fromQuery || fromHash) {
+        setIsTelegram(true);
+        setInitData(fromQuery || fromHash);
+        return;
+      }
+
+      if (attempt < maxAttempts) {
+        setTimeout(tick, 100);
+        return;
+      }
+
+      setIsTelegram(false);
+      setInitData("");
+    };
+
+    tick();
   }, []);
 
-  return initData;
+  return { initData, isTelegram };
+}
+
+function msUntilNext4amLocal(): number {
+  const now = new Date();
+  const next = new Date(now);
+  next.setHours(4, 0, 0, 0);
+  if (next.getTime() <= now.getTime()) {
+    next.setDate(next.getDate() + 1);
+  }
+  return Math.max(1_000, next.getTime() - now.getTime());
 }
 
 export default function AppShell() {
-  const initData = useTelegramInitData();
+  const { initData, isTelegram } = useTelegramInitData();
   const tzOffsetMinutes = useMemo(() => getTzOffsetMinutesClient(), []);
   const [mockTelegramId, setMockTelegramId] = useState<string | null>(null);
 
@@ -108,17 +167,56 @@ export default function AppShell() {
     },
   );
 
-  const { data: heatmap } = useSWR<HeatmapResponse>(
-    canLoad ? ["/api/stats/heatmap", tzOffsetMinutes, initData, mockTelegramId] : null,
-    async () =>
-      apiFetch<HeatmapResponse>("/api/stats/heatmap", initData, {
+  const [heatmapMetric, setHeatmapMetric] = useState<
+    "avg" | "efficiency" | "social" | "habits" | "habit"
+  >("avg");
+  const [heatmapHabitId, setHeatmapHabitId] = useState<string>("");
+
+  const { data: heatmap, mutate: mutateHeatmap } = useSWR<HeatmapResponse>(
+    canLoad
+      ? [
+          "/api/stats/heatmap",
+          tzOffsetMinutes,
+          initData,
+          mockTelegramId,
+          heatmapMetric,
+          heatmapHabitId,
+        ]
+      : null,
+    async () => {
+      if (heatmapMetric === "habit" && !heatmapHabitId) {
+        const year = new Date().getFullYear();
+        return {
+          year,
+          fromDate: `${year}-01-01`,
+          toDate: `${year}-12-31`,
+          metric: "habit",
+          points: [],
+        };
+      }
+
+      const qs = new URLSearchParams();
+      qs.set("metric", heatmapMetric);
+      if (heatmapMetric === "habit" && heatmapHabitId) qs.set("habitId", heatmapHabitId);
+      const path = `/api/stats/heatmap?${qs.toString()}`;
+      return apiFetch<HeatmapResponse>(path, initData, {
         tzOffsetMinutes,
         mockTelegramId,
-      }),
+      });
+    },
     {
       revalidateOnFocus: false,
     },
   );
+
+  useEffect(() => {
+    if (!canLoad) return;
+    const t = setTimeout(() => {
+      void mutate();
+      void mutateHeatmap();
+    }, msUntilNext4amLocal());
+    return () => clearTimeout(t);
+  }, [canLoad, mutate, mutateHeatmap]);
 
   const [newHabitTitle, setNewHabitTitle] = useState("");
   const [journalText, setJournalText] = useState("");
@@ -220,13 +318,26 @@ export default function AppShell() {
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 p-4">
       <div className="rounded-2xl border border-border/50 bg-card/60 p-4 shadow-soft backdrop-blur">
         <div className="text-sm text-muted-foreground">Habits Tracker</div>
-        <div className="mt-1 text-xl font-semibold tracking-tight">Логический день до 04:00</div>
+        <div className="mt-1 text-xl font-semibold tracking-tight">Трекер</div>
         <div className="mt-2 text-xs text-muted-foreground">
           {data?.date ? `Сегодня: ${data.date}` : ""}
         </div>
       </div>
 
-      {!canLoad && (
+      {isTelegram && !canLoad && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Загрузка…</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            <div className="text-sm text-muted-foreground">
+              Ждём initData от Telegram…
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {!isTelegram && !canLoad && (
         <Card>
           <CardHeader>
             <CardTitle>Открывай из Telegram</CardTitle>
@@ -257,10 +368,77 @@ export default function AppShell() {
       {canLoad && (
         <Card>
           <CardHeader>
-            <CardTitle>Heatmap (365 дней)</CardTitle>
+            <CardTitle>
+              Heatmap {heatmap?.year ?? new Date().getFullYear()}
+            </CardTitle>
           </CardHeader>
           <CardContent>
-            <Heatmap points={heatmap?.points ?? []} />
+            <div className="mb-3 flex flex-col gap-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  variant={heatmapMetric === "avg" ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => setHeatmapMetric("avg")}
+                >
+                  Среднее
+                </Button>
+                <Button
+                  variant={heatmapMetric === "habits" ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => setHeatmapMetric("habits")}
+                >
+                  Привычки
+                </Button>
+                <Button
+                  variant={heatmapMetric === "efficiency" ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => setHeatmapMetric("efficiency")}
+                >
+                  Эффективность
+                </Button>
+                <Button
+                  variant={heatmapMetric === "social" ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => setHeatmapMetric("social")}
+                >
+                  Социальность
+                </Button>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  variant={heatmapMetric === "habit" ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => setHeatmapMetric("habit")}
+                >
+                  Одна привычка
+                </Button>
+                <select
+                  className="h-9 flex-1 rounded-lg border border-border bg-background px-2 text-sm"
+                  value={heatmapHabitId}
+                  onChange={(e) => setHeatmapHabitId(e.target.value)}
+                  disabled={heatmapMetric !== "habit"}
+                >
+                  <option value="">Выбери привычку…</option>
+                  {(data?.habits ?? []).map((h) => (
+                    <option key={h.id} value={h.id}>
+                      {h.title}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {heatmapMetric === "habit" && !heatmapHabitId && (
+                <div className="text-xs text-muted-foreground">
+                  Выбери привычку, чтобы построить heatmap.
+                </div>
+              )}
+            </div>
+
+            <Heatmap
+              year={heatmap?.year ?? new Date().getFullYear()}
+              points={heatmap?.points ?? []}
+            />
           </CardContent>
         </Card>
       )}
