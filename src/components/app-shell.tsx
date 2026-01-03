@@ -7,10 +7,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { apiFetch, type Habit, type HeatmapResponse, type UserStatus } from "@/lib/api-client";
+import {
+  apiFetch,
+  type Habit,
+  type HeatmapResponse,
+  type NotesHistoryItem,
+  type NotesHistoryResponse,
+  type UserStatus,
+} from "@/lib/api-client";
 import { cn } from "@/lib/cn";
 import { getTelegramWebApp } from "@/lib/telegram/webapp";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 function getTzOffsetMinutesClient(): number {
   return -new Date().getTimezoneOffset();
@@ -218,7 +225,49 @@ export default function AppShell() {
     return () => clearTimeout(t);
   }, [canLoad, mutate, mutateHeatmap]);
 
+  const [notesOpen, setNotesOpen] = useState(false);
+  const [notesItems, setNotesItems] = useState<NotesHistoryItem[]>([]);
+  const [notesNextCursor, setNotesNextCursor] = useState<string | null | undefined>(undefined);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState<string | null>(null);
+
+  const loadMoreNotes = useCallback(async () => {
+    if (!canLoad) return;
+    if (notesLoading) return;
+    if (notesNextCursor === null) return;
+
+    setNotesLoading(true);
+    setNotesError(null);
+    try {
+      const qs = new URLSearchParams();
+      qs.set("limit", "10");
+      if (typeof notesNextCursor === "string" && notesNextCursor) qs.set("cursor", notesNextCursor);
+      const path = `/api/day/notes?${qs.toString()}`;
+
+      const res = await apiFetch<NotesHistoryResponse>(path, initData, {
+        tzOffsetMinutes,
+        mockTelegramId,
+      });
+
+      setNotesItems((prev) => [...prev, ...res.items]);
+      setNotesNextCursor(res.nextCursor);
+    } catch (e) {
+      setNotesError(e instanceof Error ? e.message : "Unknown error");
+    } finally {
+      setNotesLoading(false);
+    }
+  }, [canLoad, initData, mockTelegramId, notesLoading, notesNextCursor, tzOffsetMinutes]);
+
+  useEffect(() => {
+    if (!notesOpen) return;
+    if (!canLoad) return;
+    if (notesItems.length > 0) return;
+    if (notesLoading) return;
+    void loadMoreNotes();
+  }, [notesOpen, canLoad, notesItems.length, notesLoading, loadMoreNotes]);
+
   const [newHabitTitle, setNewHabitTitle] = useState("");
+  const [showNewHabit, setShowNewHabit] = useState(false);
   const [journalText, setJournalText] = useState("");
   const [savingJournal, setSavingJournal] = useState(false);
 
@@ -245,6 +294,7 @@ export default function AppShell() {
     });
 
     await mutate();
+    setShowNewHabit(false);
   }
 
   async function toggleHabit(habitId: string) {
@@ -318,7 +368,9 @@ export default function AppShell() {
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 p-4">
       <div className="rounded-2xl border border-border/50 bg-card/60 p-4 shadow-soft backdrop-blur">
         <div className="text-sm text-muted-foreground">Habits Tracker</div>
-        <div className="mt-1 text-xl font-semibold tracking-tight">Трекер</div>
+        <div className="mt-1 text-xl font-semibold tracking-tight">
+          {data?.firstName ? `Салют, ${data.firstName}` : "Салют"}
+        </div>
         <div className="mt-2 text-xs text-muted-foreground">
           {data?.date ? `Сегодня: ${data.date}` : ""}
         </div>
@@ -414,7 +466,7 @@ export default function AppShell() {
                   Одна привычка
                 </Button>
                 <select
-                  className="h-9 flex-1 rounded-lg border border-border bg-background px-2 text-sm"
+                  className="h-9 flex-1 appearance-none rounded-lg border border-border bg-background/50 px-2 text-sm shadow-sm outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:opacity-60"
                   value={heatmapHabitId}
                   onChange={(e) => setHeatmapHabitId(e.target.value)}
                   disabled={heatmapMetric !== "habit"}
@@ -447,26 +499,49 @@ export default function AppShell() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>Привычки</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => mutate()}>
-              <RefreshCw className="h-4 w-4" />
-              Обновить
-            </Button>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex gap-2">
-              <Input
-                value={newHabitTitle}
-                placeholder="Новая привычка (например, Чтение)"
-                onChange={(e) => setNewHabitTitle(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") createHabit();
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setShowNewHabit((v) => !v);
+                  setNewHabitTitle("");
                 }}
-              />
-              <Button onClick={createHabit} className="shrink-0">
+              >
                 <Plus className="h-4 w-4" />
-                Добавить
+              </Button>
+              <Button variant="ghost" size="sm" onClick={() => mutate()}>
+                <RefreshCw className="h-4 w-4" />
+                Обновить
               </Button>
             </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {showNewHabit && (
+              <div className="flex gap-2">
+                <Input
+                  value={newHabitTitle}
+                  placeholder="Новая привычка (например, Чтение)"
+                  onChange={(e) => setNewHabitTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") createHabit();
+                  }}
+                />
+                <Button onClick={createHabit} className="shrink-0">
+                  Добавить
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => {
+                    setNewHabitTitle("");
+                    setShowNewHabit(false);
+                  }}
+                  className="shrink-0"
+                >
+                  Отмена
+                </Button>
+              </div>
+            )}
 
             {isLoading && (
               <div className="text-sm text-muted-foreground">Загрузка…</div>
@@ -520,6 +595,59 @@ export default function AppShell() {
               {savingJournal ? "Сохраняю…" : "Сохранить"}
             </Button>
           </CardContent>
+        </Card>
+      )}
+
+      {canLoad && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2">
+            <CardTitle>Заметки за прошлые дни</CardTitle>
+            <Button variant="ghost" size="sm" onClick={() => setNotesOpen((v) => !v)}>
+              {notesOpen ? "Скрыть" : "Открыть"}
+            </Button>
+          </CardHeader>
+          {notesOpen && (
+            <CardContent className="space-y-3">
+              {notesError && <div className="text-sm text-red-500">{notesError}</div>}
+
+              {!notesLoading && notesItems.length === 0 && !notesError && (
+                <div className="text-sm text-muted-foreground">
+                  Пока нет заметок за прошлые дни.
+                </div>
+              )}
+
+              {notesItems.length > 0 && (
+                <div className="space-y-2">
+                  {notesItems.map((n) => (
+                    <div
+                      key={n.date}
+                      className="rounded-xl border border-border/60 bg-background/50 p-3"
+                    >
+                      <div className="text-xs text-muted-foreground">{n.date}</div>
+                      <div className="mt-1 whitespace-pre-wrap text-sm">{n.journalText}</div>
+                      <div className="mt-2 text-xs text-muted-foreground">
+                        {n.ratingEfficiency !== null ? `Эффективность: ${n.ratingEfficiency}` : ""}
+                        {n.ratingEfficiency !== null && n.ratingSocial !== null ? " · " : ""}
+                        {n.ratingSocial !== null ? `Социальность: ${n.ratingSocial}` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <Button
+                variant="secondary"
+                onClick={loadMoreNotes}
+                disabled={notesLoading || notesNextCursor === null}
+              >
+                {notesLoading
+                  ? "Загрузка…"
+                  : notesNextCursor === null
+                    ? "Больше нет"
+                    : "Загрузить ещё"}
+              </Button>
+            </CardContent>
+          )}
         </Card>
       )}
 

@@ -33,6 +33,18 @@ export type HeatmapResponse = {
   points: HeatmapPoint[];
 };
 
+export type NotesHistoryItem = {
+  date: string;
+  journalText: string;
+  ratingEfficiency: number | null;
+  ratingSocial: number | null;
+};
+
+export type NotesHistoryResponse = {
+  items: NotesHistoryItem[];
+  nextCursor: string | null;
+};
+
 export async function apiFetch<T>(
   input: string,
   initData: string,
