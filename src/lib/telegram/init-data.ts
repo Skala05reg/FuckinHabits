@@ -27,7 +27,7 @@ export function validateInitDataOrThrow(initData: string, botToken: string): voi
     .map((k) => `${k}=${data[k]}`)
     .join("\n");
 
-  const secretKey = crypto.createHash("sha256").update(botToken).digest();
+  const secretKey = crypto.createHmac("sha256", "WebAppData").update(botToken).digest();
   const calculatedHash = crypto
     .createHmac("sha256", secretKey)
     .update(dataCheckString)

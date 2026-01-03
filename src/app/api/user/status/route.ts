@@ -60,6 +60,7 @@ export async function GET(request: Request) {
     if (dayLogError) throw dayLogError;
 
     return Response.json({
+      firstName: user.first_name ?? null,
       date,
       habits: parsedHabits,
       completedHabitIds,

@@ -12,6 +12,7 @@ export type DayLog = {
 };
 
 export type UserStatus = {
+  firstName: string | null;
   date: string;
   habits: Habit[];
   completedHabitIds: string[];

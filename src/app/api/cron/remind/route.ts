@@ -23,6 +23,7 @@ export async function POST(request: Request) {
     if (error) throw error;
 
     const bot = getBot();
+    await bot.init();
     const appUrl = process.env.WEBAPP_URL;
     const keyboard = new InlineKeyboard();
     if (appUrl) keyboard.webApp("Заполнить день", appUrl);
