@@ -13,6 +13,7 @@ import {
   type HeatmapResponse,
   type NotesHistoryItem,
   type NotesHistoryResponse,
+  type StatsSummaryResponse,
   type UserStatus,
 } from "@/lib/api-client";
 import { cn } from "@/lib/cn";
@@ -151,6 +152,12 @@ function msUntilNext4amLocal(): number {
   return Math.max(1_000, next.getTime() - now.getTime());
 }
 
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 export default function AppShell() {
   const { initData, isTelegram } = useTelegramInitData();
   const tzOffsetMinutes = useMemo(() => getTzOffsetMinutesClient(), []);
@@ -161,6 +168,8 @@ export default function AppShell() {
   }, []);
 
   const canLoad = initData.length > 0 || !!mockTelegramId;
+
+  const [screen, setScreen] = useState<"home" | "stats" | "settings">("home");
 
   const { data, error, isLoading, mutate } = useSWR<UserStatus>(
     canLoad ? ["/api/user/status", tzOffsetMinutes, initData, mockTelegramId] : null,
@@ -174,13 +183,20 @@ export default function AppShell() {
     },
   );
 
+  const currentYear = useMemo(() => {
+    const d = data?.date;
+    if (!d) return new Date().getFullYear();
+    const y = Number(d.slice(0, 4));
+    return Number.isFinite(y) ? y : new Date().getFullYear();
+  }, [data?.date]);
+
   const [heatmapMetric, setHeatmapMetric] = useState<
     "avg" | "efficiency" | "social" | "habits" | "habit"
   >("avg");
   const [heatmapHabitId, setHeatmapHabitId] = useState<string>("");
 
   const { data: heatmap, mutate: mutateHeatmap } = useSWR<HeatmapResponse>(
-    canLoad
+    canLoad && screen === "stats"
       ? [
           "/api/stats/heatmap",
           tzOffsetMinutes,
@@ -192,7 +208,7 @@ export default function AppShell() {
       : null,
     async () => {
       if (heatmapMetric === "habit" && !heatmapHabitId) {
-        const year = new Date().getFullYear();
+        const year = currentYear;
         return {
           year,
           fromDate: `${year}-01-01`,
@@ -224,6 +240,192 @@ export default function AppShell() {
     }, msUntilNext4amLocal());
     return () => clearTimeout(t);
   }, [canLoad, mutate, mutateHeatmap]);
+
+  useEffect(() => {
+    if (screen !== "stats") {
+      setNotesOpen(false);
+    }
+  }, [screen]);
+
+  const [statsRange, setStatsRange] = useState<"ytd" | "30d">("ytd");
+  const statsToDate = data?.date ?? new Date().toISOString().slice(0, 10);
+  const statsFromDate = useMemo(() => {
+    if (statsRange === "30d") return addDaysIso(statsToDate, -29);
+    return `${statsToDate.slice(0, 4)}-01-01`;
+  }, [statsRange, statsToDate]);
+
+  const { data: statsSummary } = useSWR<StatsSummaryResponse>(
+    canLoad && screen === "stats"
+      ? ["/api/stats/summary", tzOffsetMinutes, initData, mockTelegramId, statsFromDate, statsToDate]
+      : null,
+    async () => {
+      const qs = new URLSearchParams();
+      qs.set("fromDate", statsFromDate);
+      qs.set("toDate", statsToDate);
+      return apiFetch<StatsSummaryResponse>(`/api/stats/summary?${qs.toString()}`, initData, {
+        tzOffsetMinutes,
+        mockTelegramId,
+      });
+    },
+    {
+      revalidateOnFocus: false,
+    },
+  );
+
+  type GoalsListResponse = {
+    year: number;
+    goals: Array<{ id: string; year: number; title: string; is_active: boolean; position: number }>;
+  };
+
+  type HabitsListResponse = {
+    habits: Habit[];
+  };
+
+  const { data: goalsList, mutate: mutateGoalsList } = useSWR<GoalsListResponse>(
+    canLoad && screen === "settings"
+      ? ["/api/goals", tzOffsetMinutes, initData, mockTelegramId, currentYear]
+      : null,
+    async () => {
+      const qs = new URLSearchParams();
+      qs.set("year", String(currentYear));
+      qs.set("includeInactive", "true");
+      return apiFetch<GoalsListResponse>(`/api/goals?${qs.toString()}`, initData, {
+        tzOffsetMinutes,
+        mockTelegramId,
+      });
+    },
+    {
+      revalidateOnFocus: false,
+    },
+  );
+
+  const { data: habitsList, mutate: mutateHabitsList } = useSWR<HabitsListResponse>(
+    canLoad && screen === "settings" ? ["/api/habits/list", tzOffsetMinutes, initData, mockTelegramId] : null,
+    async () => {
+      const qs = new URLSearchParams();
+      qs.set("includeInactive", "true");
+      return apiFetch<HabitsListResponse>(`/api/habits/list?${qs.toString()}`, initData, {
+        tzOffsetMinutes,
+        mockTelegramId,
+      });
+    },
+    {
+      revalidateOnFocus: false,
+    },
+  );
+
+  const [newGoalTitle, setNewGoalTitle] = useState("");
+  const [goalEdits, setGoalEdits] = useState<Record<string, string>>({});
+  const [habitEdits, setHabitEdits] = useState<Record<string, string>>({});
+
+  async function createGoal() {
+    const title = newGoalTitle.trim();
+    if (!title) return;
+    setNewGoalTitle("");
+
+    await apiFetch("/api/goals", initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
+      method: "POST",
+      body: { title, year: currentYear },
+    });
+
+    await mutateGoalsList();
+    await mutate();
+  }
+
+  async function saveGoalTitle(id: string) {
+    const title = (goalEdits[id] ?? "").trim();
+    if (!title) return;
+
+    await fetch(new URL(`/api/goals/${id}`, window.location.origin).toString(), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-telegram-init-data": initData,
+      },
+      body: JSON.stringify({ title }),
+    });
+
+    await mutateGoalsList();
+    await mutate();
+  }
+
+  async function toggleGoalActive(id: string, next: boolean) {
+    await fetch(new URL(`/api/goals/${id}`, window.location.origin).toString(), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-telegram-init-data": initData,
+      },
+      body: JSON.stringify({ isActive: next }),
+    });
+    await mutateGoalsList();
+    await mutate();
+  }
+
+  async function deactivateGoal(id: string) {
+    await fetch(new URL(`/api/goals/${id}`, window.location.origin).toString(), {
+      method: "DELETE",
+      headers: {
+        "x-telegram-init-data": initData,
+      },
+    });
+    await mutateGoalsList();
+    await mutate();
+  }
+
+  async function saveHabitTitle(id: string) {
+    const title = (habitEdits[id] ?? "").trim();
+    if (!title) return;
+
+    await fetch(new URL(`/api/habits/${id}`, window.location.origin).toString(), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-telegram-init-data": initData,
+      },
+      body: JSON.stringify({ title }),
+    });
+    await mutateHabitsList();
+    await mutate();
+  }
+
+  async function toggleHabitActive(id: string, next: boolean) {
+    await fetch(new URL(`/api/habits/${id}`, window.location.origin).toString(), {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "x-telegram-init-data": initData,
+      },
+      body: JSON.stringify({ isActive: next }),
+    });
+    await mutateHabitsList();
+    await mutate();
+  }
+
+  async function moveHabit(id: string, dir: -1 | 1) {
+    const list = habitsList?.habits ?? [];
+    const ordered = [...list].sort((a, b) => a.position - b.position);
+    const idx = ordered.findIndex((h) => h.id === id);
+    if (idx < 0) return;
+    const nextIdx = idx + dir;
+    if (nextIdx < 0 || nextIdx >= ordered.length) return;
+    const swapped = [...ordered];
+    const tmp = swapped[idx];
+    swapped[idx] = swapped[nextIdx];
+    swapped[nextIdx] = tmp;
+
+    await apiFetch("/api/habits/reorder", initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
+      method: "POST",
+      body: { orderedIds: swapped.map((h) => h.id) },
+    });
+
+    await mutateHabitsList();
+    await mutate();
+  }
 
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesItems, setNotesItems] = useState<NotesHistoryItem[]>([]);
@@ -376,6 +578,32 @@ export default function AppShell() {
         </div>
       </div>
 
+      {canLoad && (
+        <div className="grid grid-cols-3 gap-2">
+          <Button
+            variant={screen === "home" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setScreen("home")}
+          >
+            Главная
+          </Button>
+          <Button
+            variant={screen === "stats" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setScreen("stats")}
+          >
+            Статистика
+          </Button>
+          <Button
+            variant={screen === "settings" ? "primary" : "secondary"}
+            size="sm"
+            onClick={() => setScreen("settings")}
+          >
+            Настройки
+          </Button>
+        </div>
+      )}
+
       {isTelegram && !canLoad && (
         <Card>
           <CardHeader>
@@ -389,40 +617,82 @@ export default function AppShell() {
         </Card>
       )}
 
-      {!isTelegram && !canLoad && (
+      {canLoad && screen === "stats" && (
         <Card>
           <CardHeader>
-            <CardTitle>Открывай из Telegram</CardTitle>
+            <CardTitle>Статистика</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="text-sm text-muted-foreground">
-              Для безопасности API ждёт Telegram initData.
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={statsRange === "ytd" ? "primary" : "secondary"}
+                size="sm"
+                onClick={() => setStatsRange("ytd")}
+              >
+                С начала года
+              </Button>
+              <Button
+                variant={statsRange === "30d" ? "primary" : "secondary"}
+                size="sm"
+                onClick={() => setStatsRange("30d")}
+              >
+                30 дней
+              </Button>
             </div>
-            <div className="text-sm text-muted-foreground">
-              Для локального теста открой страницу с параметром
-              <span className="font-mono"> ?mockTelegramId=123</span> и включи
-              <span className="font-mono"> TELEGRAM_BYPASS_AUTH=true</span>.
+
+            <div className="grid grid-cols-3 gap-2">
+              <div className="rounded-xl border border-border/60 bg-background/50 p-3">
+                <div className="text-xs text-muted-foreground">Среднее</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {statsSummary?.avgOverall !== null && statsSummary?.avgOverall !== undefined
+                    ? statsSummary.avgOverall.toFixed(2)
+                    : "—"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-background/50 p-3">
+                <div className="text-xs text-muted-foreground">Эфф.</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {statsSummary?.avgEfficiency !== null && statsSummary?.avgEfficiency !== undefined
+                    ? statsSummary.avgEfficiency.toFixed(2)
+                    : "—"}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border/60 bg-background/50 p-3">
+                <div className="text-xs text-muted-foreground">Соц.</div>
+                <div className="mt-1 text-lg font-semibold">
+                  {statsSummary?.avgSocial !== null && statsSummary?.avgSocial !== undefined
+                    ? statsSummary.avgSocial.toFixed(2)
+                    : "—"}
+                </div>
+              </div>
             </div>
-            <Button
-              variant="secondary"
-              onClick={() => {
-                const url = new URL(window.location.href);
-                url.searchParams.set("mockTelegramId", "123");
-                window.location.href = url.toString();
-              }}
-            >
-              Включить demo
-            </Button>
+
+            {(statsSummary?.streaks?.length ?? 0) > 0 && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Серии (streaks)</div>
+                <div className="space-y-2">
+                  {(statsSummary?.streaks ?? []).map((s) => (
+                    <div
+                      key={s.habitId}
+                      className="rounded-xl border border-border/60 bg-background/50 p-3"
+                    >
+                      <div className="text-sm font-medium">{s.title}</div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        Текущая: {s.currentStreak} · Лучшая: {s.bestStreak} · Всего: {s.totalCompletions}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
 
-      {canLoad && (
+      {canLoad && screen === "stats" && (
         <Card>
           <CardHeader>
-            <CardTitle>
-              Heatmap {heatmap?.year ?? new Date().getFullYear()}
-            </CardTitle>
+            <CardTitle>Heatmap {heatmap?.year ?? currentYear}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="mb-3 flex flex-col gap-2">
@@ -487,15 +757,65 @@ export default function AppShell() {
               )}
             </div>
 
-            <Heatmap
-              year={heatmap?.year ?? new Date().getFullYear()}
-              points={heatmap?.points ?? []}
-            />
+            <Heatmap year={heatmap?.year ?? currentYear} points={heatmap?.points ?? []} />
           </CardContent>
         </Card>
       )}
 
-      {canLoad && (
+      {!isTelegram && !canLoad && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Открывай из Telegram</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="text-sm text-muted-foreground">
+              Для безопасности API ждёт Telegram initData.
+            </div>
+            <div className="text-sm text-muted-foreground">
+              Для локального теста открой страницу с параметром
+              <span className="font-mono"> ?mockTelegramId=123</span> и включи
+              <span className="font-mono"> TELEGRAM_BYPASS_AUTH=true</span>.
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                const url = new URL(window.location.href);
+                url.searchParams.set("mockTelegramId", "123");
+                window.location.href = url.toString();
+              }}
+            >
+              Включить demo
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {canLoad && screen === "home" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Цели на {currentYear}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2">
+            {(data?.yearGoals ?? []).length === 0 ? (
+              <div className="text-sm text-muted-foreground">Пока нет целей на год.</div>
+            ) : (
+              <div className="space-y-2">
+                {(data?.yearGoals ?? []).map((g) => (
+                  <div
+                    key={g.id}
+                    className="rounded-xl border border-border/60 bg-background/50 px-3 py-2 text-sm"
+                  >
+                    {g.title}
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="text-xs text-muted-foreground">Редактирование — в Настройках.</div>
+          </CardContent>
+        </Card>
+      )}
+
+      {canLoad && screen === "home" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>Привычки</CardTitle>
@@ -560,7 +880,7 @@ export default function AppShell() {
         </Card>
       )}
 
-      {canLoad && (
+      {canLoad && screen === "home" && (
         <Card>
           <CardHeader>
             <CardTitle>Оценка дня</CardTitle>
@@ -580,7 +900,7 @@ export default function AppShell() {
         </Card>
       )}
 
-      {canLoad && (
+      {canLoad && screen === "home" && (
         <Card>
           <CardHeader>
             <CardTitle>Итоги / заметка</CardTitle>
@@ -598,7 +918,7 @@ export default function AppShell() {
         </Card>
       )}
 
-      {canLoad && (
+      {canLoad && screen === "stats" && (
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <CardTitle>Заметки за прошлые дни</CardTitle>
@@ -648,6 +968,119 @@ export default function AppShell() {
               </Button>
             </CardContent>
           )}
+        </Card>
+      )}
+
+      {canLoad && screen === "settings" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Настройки</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="space-y-3">
+              <div className="text-sm font-medium">Цели на {currentYear}</div>
+              <div className="flex gap-2">
+                <Input
+                  value={newGoalTitle}
+                  placeholder="Новая цель на год"
+                  onChange={(e) => setNewGoalTitle(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void createGoal();
+                  }}
+                />
+                <Button onClick={createGoal} className="shrink-0">
+                  Добавить
+                </Button>
+              </div>
+
+              {(goalsList?.goals ?? []).length === 0 && (
+                <div className="text-sm text-muted-foreground">Пока нет целей.</div>
+              )}
+
+              {(goalsList?.goals ?? []).map((g) => (
+                <div
+                  key={g.id}
+                  className={cn(
+                    "rounded-xl border border-border/60 bg-background/50 p-3",
+                    !g.is_active && "opacity-60",
+                  )}
+                >
+                  <div className="flex gap-2">
+                    <Input
+                      value={goalEdits[g.id] ?? g.title}
+                      onChange={(e) =>
+                        setGoalEdits((prev) => ({
+                          ...prev,
+                          [g.id]: e.target.value,
+                        }))
+                      }
+                    />
+                    <Button variant="secondary" onClick={() => void saveGoalTitle(g.id)}>
+                      Сохранить
+                    </Button>
+                  </div>
+                  <div className="mt-2 flex gap-2">
+                    {g.is_active ? (
+                      <Button variant="secondary" onClick={() => void deactivateGoal(g.id)}>
+                        Удалить
+                      </Button>
+                    ) : (
+                      <Button variant="secondary" onClick={() => void toggleGoalActive(g.id, true)}>
+                        Восстановить
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-3">
+              <div className="text-sm font-medium">Привычки</div>
+
+              {(habitsList?.habits ?? []).length === 0 && (
+                <div className="text-sm text-muted-foreground">Пока нет привычек.</div>
+              )}
+
+              {(habitsList?.habits ?? [])
+                .slice()
+                .sort((a, b) => a.position - b.position)
+                .map((h) => (
+                  <div
+                    key={h.id}
+                    className={cn(
+                      "rounded-xl border border-border/60 bg-background/50 p-3",
+                      !h.is_active && "opacity-60",
+                    )}
+                  >
+                    <div className="flex gap-2">
+                      <Input
+                        value={habitEdits[h.id] ?? h.title}
+                        onChange={(e) =>
+                          setHabitEdits((prev) => ({
+                            ...prev,
+                            [h.id]: e.target.value,
+                          }))
+                        }
+                      />
+                      <Button variant="secondary" onClick={() => void saveHabitTitle(h.id)}>
+                        Сохранить
+                      </Button>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button variant="secondary" onClick={() => void toggleHabitActive(h.id, !h.is_active)}>
+                        {h.is_active ? "Выключить" : "Включить"}
+                      </Button>
+                      <Button variant="secondary" onClick={() => void moveHabit(h.id, -1)}>
+                        Вверх
+                      </Button>
+                      <Button variant="secondary" onClick={() => void moveHabit(h.id, 1)}>
+                        Вниз
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
         </Card>
       )}
 

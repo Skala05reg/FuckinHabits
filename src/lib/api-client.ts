@@ -11,9 +11,16 @@ export type DayLog = {
   journal_text: string | null;
 };
 
+export type YearGoal = {
+  id: string;
+  title: string;
+  position: number;
+};
+
 export type UserStatus = {
   firstName: string | null;
   date: string;
+  yearGoals: YearGoal[];
   habits: Habit[];
   completedHabitIds: string[];
   dayLog: DayLog | null;
@@ -43,6 +50,25 @@ export type NotesHistoryItem = {
 export type NotesHistoryResponse = {
   items: NotesHistoryItem[];
   nextCursor: string | null;
+};
+
+export type StatsStreak = {
+  habitId: string;
+  title: string;
+  currentStreak: number;
+  bestStreak: number;
+  totalCompletions: number;
+};
+
+export type StatsSummaryResponse = {
+  fromDate: string;
+  toDate: string;
+  avgEfficiency: number | null;
+  avgSocial: number | null;
+  avgOverall: number | null;
+  daysWithRatings: number;
+  daysWithAnyCompletion: number;
+  streaks: StatsStreak[];
 };
 
 export async function apiFetch<T>(

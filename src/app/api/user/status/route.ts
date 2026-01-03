@@ -15,6 +15,14 @@ const HabitRow = z.object({
   position: z.number(),
 });
 
+const GoalRow = z.object({
+  id: z.string(),
+  title: z.string(),
+  is_active: z.boolean(),
+  position: z.number(),
+  year: z.number(),
+});
+
 export async function GET(request: Request) {
   try {
     const auth = await getTelegramAuthOrThrow(request);
@@ -28,6 +36,10 @@ export async function GET(request: Request) {
     });
 
     const date = getLogicalDate(new Date(), tzOffsetMinutes);
+    const year = Number(date.slice(0, 4));
+    if (!Number.isFinite(year) || year < 1970 || year > 2500) {
+      throw new Error("Invalid year");
+    }
 
     const { data: habits, error: habitsError } = await supabaseAdmin
       .from("habits")
@@ -59,9 +71,22 @@ export async function GET(request: Request) {
 
     if (dayLogError) throw dayLogError;
 
+    const { data: goals, error: goalsError } = await supabaseAdmin
+      .from("year_goals")
+      .select("id,title,is_active,position,year")
+      .eq("user_id", user.id)
+      .eq("year", year)
+      .eq("is_active", true)
+      .order("position", { ascending: true });
+
+    if (goalsError) throw goalsError;
+
+    const parsedGoals = z.array(GoalRow).parse(goals ?? []);
+
     return Response.json({
       firstName: user.first_name ?? null,
       date,
+      yearGoals: parsedGoals.map((g) => ({ id: g.id, title: g.title, position: g.position })),
       habits: parsedHabits,
       completedHabitIds,
       dayLog: dayLog ?? null,
