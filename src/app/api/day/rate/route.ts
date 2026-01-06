@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z
   .object({
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
     efficiency: z.number().int().min(1).max(5).optional(),
     social: z.number().int().min(1).max(5).optional(),
     journalText: z.string().max(10_000).optional(),
@@ -35,7 +36,7 @@ export async function POST(request: Request) {
       tzOffsetMinutes,
     });
 
-    const date = getLogicalDate(new Date(), tzOffsetMinutes);
+    const date = body.date ?? getLogicalDate(new Date(), tzOffsetMinutes);
 
     const payload: Record<string, unknown> = {
       user_id: user.id,

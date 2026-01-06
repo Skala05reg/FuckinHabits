@@ -23,10 +23,18 @@ const GoalRow = z.object({
   year: z.number(),
 });
 
+const QuerySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
 export async function GET(request: Request) {
   try {
     const auth = await getTelegramAuthOrThrow(request);
     const tzOffsetMinutes = getTzOffsetMinutes(request);
+    const url = new URL(request.url);
+    const { date: queryDate } = QuerySchema.parse({
+      date: url.searchParams.get("date") ?? undefined,
+    });
     const supabaseAdmin = getSupabaseAdmin();
 
     const user = await ensureUser({
@@ -35,7 +43,7 @@ export async function GET(request: Request) {
       tzOffsetMinutes,
     });
 
-    const date = getLogicalDate(new Date(), tzOffsetMinutes);
+    const date = queryDate ?? getLogicalDate(new Date(), tzOffsetMinutes);
     const year = Number(date.slice(0, 4));
     if (!Number.isFinite(year) || year < 1970 || year > 2500) {
       throw new Error("Invalid year");

@@ -1,6 +1,6 @@
 "use client";
 
-import { CheckCircle2, Circle, Plus, RefreshCw } from "lucide-react";
+import { ArrowLeft, ArrowRight, CheckCircle2, Circle, Plus, RefreshCw } from "lucide-react";
 import useSWR from "swr";
 
 import { Button } from "@/components/ui/button";
@@ -170,14 +170,19 @@ export default function AppShell() {
   const canLoad = initData.length > 0 || !!mockTelegramId;
 
   const [screen, setScreen] = useState<"home" | "stats" | "settings">("home");
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const { data, error, isLoading, mutate } = useSWR<UserStatus>(
-    canLoad ? ["/api/user/status", tzOffsetMinutes, initData, mockTelegramId] : null,
-    async () =>
-      apiFetch<UserStatus>("/api/user/status", initData, {
+    canLoad ? ["/api/user/status", tzOffsetMinutes, initData, mockTelegramId, selectedDate] : null,
+    async () => {
+      const qs = new URLSearchParams();
+      if (selectedDate) qs.set("date", selectedDate);
+      const path = `/api/user/status${qs.toString() ? `?${qs.toString()}` : ""}`;
+      return apiFetch<UserStatus>(path, initData, {
         tzOffsetMinutes,
         mockTelegramId,
-      }),
+      });
+    },
     {
       revalidateOnFocus: false,
     },
@@ -519,7 +524,7 @@ export default function AppShell() {
         tzOffsetMinutes,
         mockTelegramId,
         method: "POST",
-        body: { habitId },
+        body: { habitId, date: selectedDate },
       });
     } finally {
       await mutate();
@@ -545,7 +550,7 @@ export default function AppShell() {
       tzOffsetMinutes,
       mockTelegramId,
       method: "POST",
-      body: kind === "efficiency" ? { efficiency: value } : { social: value },
+      body: kind === "efficiency" ? { efficiency: value, date: selectedDate } : { social: value, date: selectedDate },
     });
 
     await mutate();
@@ -558,13 +563,28 @@ export default function AppShell() {
         tzOffsetMinutes,
         mockTelegramId,
         method: "POST",
-        body: { journalText },
+        body: { journalText, date: selectedDate },
       });
       await mutate();
     } finally {
       setSavingJournal(false);
     }
   }
+
+  function navigateDate(delta: number) {
+    if (!data?.date) return;
+    const d = new Date(`${data.date}T00:00:00Z`);
+    d.setUTCDate(d.getUTCDate() + delta);
+    const newDate = d.toISOString().slice(0, 10);
+    setSelectedDate(newDate);
+  }
+
+  function goToToday() {
+    setSelectedDate(null);
+  }
+
+  const displayDate = selectedDate ?? data?.date;
+  const isPastDate = displayDate && data?.date && displayDate < data.date;
 
   return (
     <div className="mx-auto flex w-full max-w-md flex-col gap-4 p-4">
@@ -573,9 +593,29 @@ export default function AppShell() {
         <div className="mt-1 text-xl font-semibold tracking-tight">
           {data?.firstName ? `Салют, ${data.firstName}` : "Салют"}
         </div>
-        <div className="mt-2 text-xs text-muted-foreground">
-          {data?.date ? `Сегодня: ${data.date}` : ""}
+        <div className="mt-3 flex items-center justify-between gap-2">
+          <Button variant="ghost" size="sm" onClick={() => navigateDate(-1)}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex-1 text-center">
+            <div className="text-xs text-muted-foreground">
+              {isPastDate ? "Выбранная дата:" : "Сегодня:"}
+            </div>
+            <div className={cn("text-sm font-medium", isPastDate && "text-primary")}>
+              {displayDate ?? ""}
+            </div>
+          </div>
+          <Button variant="ghost" size="sm" onClick={() => navigateDate(1)}>
+            <ArrowRight className="h-4 w-4" />
+          </Button>
         </div>
+        {isPastDate && (
+          <div className="mt-2 text-center">
+            <Button variant="secondary" size="sm" onClick={goToToday}>
+              Вернуться к сегодняшнему дню
+            </Button>
+          </div>
+        )}
       </div>
 
       {canLoad && (
@@ -836,6 +876,13 @@ export default function AppShell() {
               </Button>
             </div>
           </CardHeader>
+          {isPastDate && (
+            <div className="px-4 pb-2">
+              <div className="rounded-lg bg-primary/10 px-3 py-2 text-xs text-primary">
+                Режим редактирования прошлых дней
+              </div>
+            </div>
+          )}
           <CardContent className="space-y-3">
             {showNewHabit && (
               <div className="flex gap-2">
@@ -883,7 +930,9 @@ export default function AppShell() {
       {canLoad && screen === "home" && (
         <Card>
           <CardHeader>
-            <CardTitle>Оценка дня</CardTitle>
+            <CardTitle>
+              {isPastDate ? "Оценка дня (редактирование)" : "Оценка дня"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <RatingRow
@@ -903,12 +952,14 @@ export default function AppShell() {
       {canLoad && screen === "home" && (
         <Card>
           <CardHeader>
-            <CardTitle>Итоги / заметка</CardTitle>
+            <CardTitle>
+              {isPastDate ? "Итоги / заметка (редактирование)" : "Итоги / заметка"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <Textarea
               value={journalText}
-              placeholder="Как прошёл день?"
+              placeholder={isPastDate ? "Редактируй заметку за этот день..." : "Как прошёл день?"}
               onChange={(e) => setJournalText(e.target.value)}
             />
             <Button onClick={saveJournal} disabled={savingJournal}>

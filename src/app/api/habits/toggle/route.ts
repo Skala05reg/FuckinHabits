@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 
 const BodySchema = z.object({
   habitId: z.string().min(1),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
 export async function POST(request: Request) {
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
       tzOffsetMinutes,
     });
 
-    const date = getLogicalDate(new Date(), tzOffsetMinutes);
+    const date = body.date ?? getLogicalDate(new Date(), tzOffsetMinutes);
 
     const { data: habit, error: habitError } = await supabaseAdmin
       .from("habits")
