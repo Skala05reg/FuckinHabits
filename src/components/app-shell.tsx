@@ -185,6 +185,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
+      dedupingInterval: 60000,
     },
   );
 
@@ -234,6 +235,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
+      dedupingInterval: 60000,
     },
   );
 
@@ -274,6 +276,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
+      dedupingInterval: 60000,
     },
   );
 
@@ -301,6 +304,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
+      dedupingInterval: 60000,
     },
   );
 
@@ -316,6 +320,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
+      dedupingInterval: 60000,
     },
   );
 
@@ -477,6 +482,7 @@ export default function AppShell() {
   const [showNewHabit, setShowNewHabit] = useState(false);
   const [journalText, setJournalText] = useState("");
   const [savingJournal, setSavingJournal] = useState(false);
+  const [journalSaved, setJournalSaved] = useState(false);
 
   useEffect(() => {
     setJournalText(data?.dayLog?.journal_text ?? "");
@@ -558,6 +564,7 @@ export default function AppShell() {
 
   async function saveJournal() {
     setSavingJournal(true);
+    setJournalSaved(false);
     try {
       await apiFetch("/api/day/rate", initData, {
         tzOffsetMinutes,
@@ -566,6 +573,8 @@ export default function AppShell() {
         body: { journalText, date: selectedDate },
       });
       await mutate();
+      setJournalSaved(true);
+      setTimeout(() => setJournalSaved(false), 2000);
     } finally {
       setSavingJournal(false);
     }
@@ -969,8 +978,15 @@ export default function AppShell() {
               placeholder={isPastDate ? "Редактируй заметку за этот день..." : "Как прошёл день?"}
               onChange={(e) => setJournalText(e.target.value)}
             />
-            <Button onClick={saveJournal} disabled={savingJournal}>
-              {savingJournal ? "Сохраняю…" : "Сохранить"}
+            <Button
+              onClick={saveJournal}
+              disabled={savingJournal}
+              className={cn(
+                "transition-all duration-300",
+                journalSaved && "bg-green-600 hover:bg-green-700 text-white border-green-700"
+              )}
+            >
+              {savingJournal ? "Сохраняю…" : journalSaved ? "Сохранено!" : "Сохранить"}
             </Button>
           </CardContent>
         </Card>
