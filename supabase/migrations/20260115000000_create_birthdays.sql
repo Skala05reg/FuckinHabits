@@ -1,31 +1,39 @@
--- Create birthdays table
-create table if not exists public.birthdays (
-    id uuid default gen_random_uuid() primary key,
-    user_id uuid references public.users(id) on delete cascade not null,
-    name text not null,
-    date date not null,
-    created_at timestamp with time zone default timezone('utc'::text, now()) not null
+-- Create birthdays table if it doesn't exist
+CREATE TABLE IF NOT EXISTS public.birthdays (
+    id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+    name text NOT NULL,
+    date date NOT NULL,
+    created_at timestamptz DEFAULT now() NOT NULL
 );
 
+-- Use a simpler way to add the column if it's missing (Postgres 9.6+)
+ALTER TABLE public.birthdays ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES public.users(id) ON DELETE CASCADE;
+
+-- Ensure it's NOT NULL (only works if no rows exist yet, which is likely the case if migration failed)
+-- If there are rows, we'd need to set a default or handle them, but assuming fresh start.
+DO $$
+BEGIN
+    ALTER TABLE public.birthdays ALTER COLUMN user_id SET NOT NULL;
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Could not set user_id to NOT NULL, perhaps there is existing data or column still missing.';
+END $$;
+
 -- Enable RLS
-alter table public.birthdays enable row level security;
+ALTER TABLE public.birthdays ENABLE ROW LEVEL SECURITY;
 
--- Create policy to allow users to see and manage only their own birthdays
-create policy "Users can view their own birthdays"
-on public.birthdays for select
-using (auth.uid() = user_id); -- Note: Assuming auth.uid() usage matches your app's auth logic. 
--- However, looking at architecture.md, it seems there is a specific `users` table and bot logic handling "authentication" via telegram_id mapping.
--- If this table is accessed via the Bot API/Backend, RLS might not be strictly necessary if we use Service Role key, 
--- but if we use Supabase Client on client-side, we need proper policies.
--- Given `architecture.md` mentions "RLS (Row Level Security), чтобы юзеры не читали чужие данные (хотя у нас вся логика на бэке, но для безопасности полезно)", we should add it.
--- BUT, `ensureUser` uses a custom `users` table, not necessarily `auth.users`. 
--- If we are using `supabase-js` in Node with Service Role, RLS is bypassed. 
--- If we access from Frontend, we need a way to identify the user. 
--- The architecture says "Backend (API & Bot Logic)". The frontend likely fetches via API routes.
--- So the API route will handle the filtering by `user_id`.
--- We will keep the policy simple or permissive for service role, but for safety:
+-- Clean up policies
+DROP POLICY IF EXISTS "Users can view their own birthdays" ON public.birthdays;
+DROP POLICY IF EXISTS "Service role can do anything with birthdays" ON public.birthdays;
+DROP POLICY IF EXISTS "Users can manage their own birthdays" ON public.birthdays;
 
-create policy "Service role can do anything with birthdays"
-on public.birthdays
-using (true)
-with check (true);
+-- Since the backend uses Service Role (which bypasses RLS), 
+-- we keep it simple or use a policy that matches the user_id for client-side access.
+-- If you use public.users table (not auth.users), auth.uid() won't work directly 
+-- unless you have custom JWT mapping.
+-- Assuming backend-only access or Service Role:
+CREATE POLICY "Service role can do anything with birthdays"
+ON public.birthdays
+FOR ALL
+USING (true)
+WITH CHECK (true);

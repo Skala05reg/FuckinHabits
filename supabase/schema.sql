@@ -52,3 +52,13 @@ create table if not exists public.habit_completions (
 );
 
 create index if not exists habit_completions_user_id_date_idx on public.habit_completions(user_id, date);
+
+create table if not exists public.birthdays (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.users(id) on delete cascade,
+  name text not null,
+  date date not null,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists birthdays_user_id_idx on public.birthdays(user_id);
