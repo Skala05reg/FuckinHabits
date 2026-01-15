@@ -51,9 +51,10 @@ export async function PUT(
         }
 
         return NextResponse.json({ birthday: updated });
-    } catch (e: any) {
-        console.error("API Error", e);
-        return NextResponse.json({ error: e.message }, { status: 401 });
+    } catch (e: unknown) {
+        const error = e instanceof Error ? e : new Error(String(e));
+        console.error("API Error", error);
+        return NextResponse.json({ error: error.message }, { status: 401 });
     }
 }
 
@@ -94,8 +95,9 @@ export async function DELETE(
         }
 
         return NextResponse.json({ success: true });
-    } catch (e: any) {
-        console.error("API Error", e);
-        return NextResponse.json({ error: e.message }, { status: 401 });
+    } catch (e: unknown) {
+        const error = e instanceof Error ? e : new Error(String(e));
+        console.error("API Error", error);
+        return NextResponse.json({ error: error.message }, { status: 401 });
     }
 }

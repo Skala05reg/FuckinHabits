@@ -33,7 +33,7 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    const matches = birthdays.filter((b: any) => {
+    const matches = (birthdays || []).filter((b: { date: string }) => {
         const d = new Date(b.date);
         return d.getMonth() === targetMonth && d.getDate() === targetDate;
     });

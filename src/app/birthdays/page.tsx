@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import useSWR, { mutate } from "swr";
-import Link from "next/link";
 import { ArrowLeft, Plus, Trash2, Edit2, Loader2, Calendar } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -80,7 +79,7 @@ export default function BirthdaysPage() {
                 const d = new Date(dStr);
                 const m = d.getMonth();
                 const day = d.getDate();
-                let next = new Date(currentYear, m, day);
+                const next = new Date(currentYear, m, day);
                 if (next < today) {
                     next.setFullYear(currentYear + 1);
                 }
@@ -98,7 +97,7 @@ export default function BirthdaysPage() {
         try {
             if (editingId) {
                 await apiFetch(`/api/birthdays/${editingId}`, initData, {
-                    method: "PUT" as any,
+                    method: "PUT",
                     body: { name, date }
                 });
             } else {
@@ -121,7 +120,7 @@ export default function BirthdaysPage() {
         if (!confirm("Are you sure?")) return;
         try {
             await apiFetch(`/api/birthdays/${id}`, initData, {
-                method: "DELETE" as any
+                method: "DELETE"
             });
             mutate(["/api/birthdays", initData]);
         } catch (err) {

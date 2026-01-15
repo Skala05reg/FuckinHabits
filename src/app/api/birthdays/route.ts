@@ -19,17 +19,18 @@ export async function GET(request: Request) {
       .order("date", { ascending: true }); // We might want to sort by MM-DD in code
 
     if (error) {
-       console.error("Error fetching birthdays:", error);
-       return NextResponse.json({ error: "Failed to fetch birthdays" }, { status: 500 });
+      console.error("Error fetching birthdays:", error);
+      return NextResponse.json({ error: "Failed to fetch birthdays" }, { status: 500 });
     }
 
     // Sort by upcoming logic can be done here or on client.
     // Let's do it on client for simplicity sending raw data mostly.
-    
+
     return NextResponse.json({ birthdays });
-  } catch (e: any) {
-    console.error("API Error", e);
-    return NextResponse.json({ error: e.message }, { status: 401 });
+  } catch (e: unknown) {
+    const error = e instanceof Error ? e : new Error(String(e));
+    console.error("API Error", error);
+    return NextResponse.json({ error: error.message }, { status: 401 });
   }
 }
 
@@ -57,13 +58,14 @@ export async function POST(request: Request) {
       .single();
 
     if (error) {
-        console.error("Error creating birthday:", error);
-        return NextResponse.json({ error: "Failed to create birthday" }, { status: 500 });
+      console.error("Error creating birthday:", error);
+      return NextResponse.json({ error: "Failed to create birthday" }, { status: 500 });
     }
 
     return NextResponse.json({ birthday: created });
-  } catch (e: any) {
-    console.error("API Error", e);
-    return NextResponse.json({ error: e.message }, { status: 401 });
+  } catch (e: unknown) {
+    const error = e instanceof Error ? e : new Error(String(e));
+    console.error("API Error", error);
+    return NextResponse.json({ error: error.message }, { status: 401 });
   }
 }
