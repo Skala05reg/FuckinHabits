@@ -49,6 +49,15 @@ function useInitData() {
     return initData;
 }
 
+const MONTHS = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"
+];
+
+function getDaysInMonth(monthIndex: number, year: number = 2024) {
+    return new Date(year, monthIndex + 1, 0).getDate();
+}
+
 export default function BirthdaysPage() {
     const initData = useInitData();
     const [isAdding, setIsAdding] = useState(false);
@@ -56,7 +65,10 @@ export default function BirthdaysPage() {
 
     // Form state
     const [name, setName] = useState("");
-    const [date, setDate] = useState("");
+    // We store day and month separately
+    const [day, setDay] = useState<number>(1);
+    const [month, setMonth] = useState<number>(0); // 0-11
+
     const [loading, setLoading] = useState(false);
 
     const { data, isLoading } = useSWR<{ birthdays: Birthday[] }>(
@@ -91,18 +103,25 @@ export default function BirthdaysPage() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!name || !date) return;
+        if (!name) return;
         setLoading(true);
+
+        // Construct a "fake" year date like 2000-MM-DD
+        const year = 2000;
+        // Ensure explicit MM and DD formatting
+        const mm = String(month + 1).padStart(2, "0");
+        const dd = String(day).padStart(2, "0");
+        const dateStr = `${year}-${mm}-${dd}`;
 
         try {
             if (editingId) {
                 await apiFetch(`/api/birthdays/${editingId}`, initData, {
                     method: "PUT",
-                    body: { name, date }
+                    body: { name, date: dateStr }
                 });
             } else {
                 await apiFetch("/api/birthdays", initData, {
-                    body: { name, date }
+                    body: { name, date: dateStr }
                 });
             }
             mutate(["/api/birthdays", initData]);
@@ -131,19 +150,24 @@ export default function BirthdaysPage() {
 
     const startEdit = (b: Birthday) => {
         setName(b.name);
-        setDate(b.date);
+        const d = new Date(b.date);
+        setMonth(d.getMonth());
+        setDay(d.getDate());
         setEditingId(b.id);
         setIsAdding(true);
     };
 
     const resetForm = () => {
         setName("");
-        setDate("");
+        setMonth(new Date().getMonth());
+        setDay(new Date().getDate());
         setEditingId(null);
         setIsAdding(false);
     };
 
     if (!initData) return <div className="flex bg-background h-screen items-center justify-center p-4 text-muted-foreground">Loading Telegram Data...</div>;
+
+    const daysOptions = Array.from({ length: getDaysInMonth(month) }, (_, i) => i + 1);
 
     return (
         <div className="min-h-dvh bg-background p-4 pb-20">
@@ -167,16 +191,36 @@ export default function BirthdaysPage() {
                                     required
                                 />
                             </div>
-                            <div>
-                                <label className="text-sm font-medium mb-1 block">Date</label>
-                                <Input
-                                    type="date"
-                                    value={date}
-                                    onChange={e => setDate(e.target.value)}
-                                    required
-                                />
+                            <div className="flex gap-2">
+                                <div className="flex-1">
+                                    <label className="text-sm font-medium mb-1 block">Month</label>
+                                    <select
+                                        className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                        value={month}
+                                        onChange={(e) => {
+                                            setDay(1);
+                                            setMonth(Number(e.target.value));
+                                        }}
+                                    >
+                                        {MONTHS.map((mName, i) => (
+                                            <option key={mName} value={i}>{mName}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="w-24">
+                                    <label className="text-sm font-medium mb-1 block">Day</label>
+                                    <select
+                                        className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                                        value={day}
+                                        onChange={(e) => setDay(Number(e.target.value))}
+                                    >
+                                        {daysOptions.map(d => (
+                                            <option key={d} value={d}>{d}</option>
+                                        ))}
+                                    </select>
+                                </div>
                             </div>
-                            <div className="flex gap-2 justify-end">
+                            <div className="flex gap-2 justify-end pt-2">
                                 <Button type="button" variant="ghost" onClick={resetForm}>Cancel</Button>
                                 <Button type="submit" disabled={loading}>
                                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -196,7 +240,7 @@ export default function BirthdaysPage() {
                 <div className="space-y-3">
                     {sortedBirthdays.map((b) => {
                         const bDate = new Date(b.date);
-                        const dateStr = bDate.toLocaleDateString(undefined, { month: 'long', day: 'numeric' });
+                        const dateStr = bDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
                         return (
                             <Card key={b.id}>
                                 <CardContent className="p-4 flex items-center justify-between">

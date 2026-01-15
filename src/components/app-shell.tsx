@@ -525,16 +525,12 @@ export default function AppShell() {
       { revalidate: false },
     );
 
-    try {
-      await apiFetch("/api/habits/toggle", initData, {
-        tzOffsetMinutes,
-        mockTelegramId,
-        method: "POST",
-        body: { habitId, date: selectedDate },
-      });
-    } finally {
-      await mutate();
-    }
+    await apiFetch("/api/habits/toggle", initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
+      method: "POST",
+      body: { habitId, date: selectedDate },
+    });
   }
 
   async function setRating(kind: "efficiency" | "social", value: number) {
@@ -558,13 +554,24 @@ export default function AppShell() {
       method: "POST",
       body: kind === "efficiency" ? { efficiency: value, date: selectedDate } : { social: value, date: selectedDate },
     });
-
-    await mutate();
   }
 
   async function saveJournal() {
     setSavingJournal(true);
     setJournalSaved(false);
+
+    // Optimistic update for journal text
+    await mutate(
+      {
+        ...data!,
+        dayLog: {
+          ...(data?.dayLog ?? { rating_efficiency: null, rating_social: null }),
+          journal_text: journalText,
+        },
+      },
+      { revalidate: false },
+    );
+
     try {
       await apiFetch("/api/day/rate", initData, {
         tzOffsetMinutes,
@@ -572,7 +579,7 @@ export default function AppShell() {
         method: "POST",
         body: { journalText, date: selectedDate },
       });
-      await mutate();
+      // specific revalidate if needed, but we trust local state
       setJournalSaved(true);
       setTimeout(() => setJournalSaved(false), 2000);
     } finally {
