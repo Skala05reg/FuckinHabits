@@ -39,7 +39,7 @@ function Heatmap({
   const end = new Date(`${endIso}T00:00:00Z`);
 
   const daysInYear: { date: string; value: number }[] = [];
-  for (let d = new Date(start); d <= end; ) {
+  for (let d = new Date(start); d <= end;) {
     const iso = d.toISOString().slice(0, 10);
     daysInYear.push({ date: iso, value: map.get(iso) ?? 0 });
     d = new Date(d);
@@ -203,13 +203,13 @@ export default function AppShell() {
   const { data: heatmap, mutate: mutateHeatmap } = useSWR<HeatmapResponse>(
     canLoad && screen === "stats"
       ? [
-          "/api/stats/heatmap",
-          tzOffsetMinutes,
-          initData,
-          mockTelegramId,
-          heatmapMetric,
-          heatmapHabitId,
-        ]
+        "/api/stats/heatmap",
+        tzOffsetMinutes,
+        initData,
+        mockTelegramId,
+        heatmapMetric,
+        heatmapHabitId,
+      ]
       : null,
     async () => {
       if (heatmapMetric === "habit" && !heatmapHabitId) {
@@ -640,6 +640,13 @@ export default function AppShell() {
             onClick={() => setScreen("settings")}
           >
             Настройки
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => window.location.href = "/birthdays"}
+          >
+            ДР
           </Button>
         </div>
       )}

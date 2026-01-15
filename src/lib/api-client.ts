@@ -5,6 +5,12 @@ export type Habit = {
   position: number;
 };
 
+export type Birthday = {
+  id: string;
+  name: string;
+  date: string; // YYYY-MM-DD
+};
+
 export type DayLog = {
   rating_efficiency: number | null;
   rating_social: number | null;

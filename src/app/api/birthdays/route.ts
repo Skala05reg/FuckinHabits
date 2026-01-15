@@ -1,0 +1,69 @@
+import { NextResponse } from "next/server";
+import { getTelegramAuthOrThrow } from "@/lib/api-auth";
+import { ensureUser } from "@/lib/db/users";
+import { getSupabaseAdmin } from "@/lib/supabase";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  try {
+    const { telegramId, firstName } = await getTelegramAuthOrThrow(request);
+    const user = await ensureUser({ telegramId, firstName });
+
+    const supabase = getSupabaseAdmin();
+    const { data: birthdays, error } = await supabase
+      .from("birthdays")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("date", { ascending: true }); // We might want to sort by MM-DD in code
+
+    if (error) {
+       console.error("Error fetching birthdays:", error);
+       return NextResponse.json({ error: "Failed to fetch birthdays" }, { status: 500 });
+    }
+
+    // Sort by upcoming logic can be done here or on client.
+    // Let's do it on client for simplicity sending raw data mostly.
+    
+    return NextResponse.json({ birthdays });
+  } catch (e: any) {
+    console.error("API Error", e);
+    return NextResponse.json({ error: e.message }, { status: 401 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { telegramId, firstName } = await getTelegramAuthOrThrow(request);
+    const user = await ensureUser({ telegramId, firstName });
+
+    const body = await request.json();
+    const { name, date } = body;
+
+    if (!name || !date) {
+      return NextResponse.json({ error: "Missing name or date" }, { status: 400 });
+    }
+
+    const supabase = getSupabaseAdmin();
+    const { data: created, error } = await supabase
+      .from("birthdays")
+      .insert({
+        user_id: user.id,
+        name,
+        date, // YYYY-MM-DD
+      })
+      .select()
+      .single();
+
+    if (error) {
+        console.error("Error creating birthday:", error);
+        return NextResponse.json({ error: "Failed to create birthday" }, { status: 500 });
+    }
+
+    return NextResponse.json({ birthday: created });
+  } catch (e: any) {
+    console.error("API Error", e);
+    return NextResponse.json({ error: e.message }, { status: 401 });
+  }
+}
