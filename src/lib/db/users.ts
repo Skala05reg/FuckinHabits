@@ -5,6 +5,7 @@ export type DbUser = {
   telegram_id: number;
   first_name: string | null;
   tz_offset_minutes: number;
+  digest_time: string | null;
 };
 
 export async function ensureUser(params: {
@@ -17,11 +18,13 @@ export async function ensureUser(params: {
 
   const { data: existing, error: existingError } = await supabaseAdmin
     .from("users")
-    .select("id, telegram_id, first_name, tz_offset_minutes")
+    .select("id, telegram_id, first_name, tz_offset_minutes, digest_time")
     .eq("telegram_id", telegramId)
     .maybeSingle();
 
-  if (existingError) throw existingError;
+  if (existingError) {
+    throw new Error(`Supabase error (existing): ${existingError.message}`);
+  }
 
   if (!existing) {
     const { data: created, error: createError } = await supabaseAdmin
@@ -31,10 +34,12 @@ export async function ensureUser(params: {
         first_name: firstName ?? null,
         tz_offset_minutes: tzOffsetMinutes ?? 0,
       })
-      .select("id, telegram_id, first_name, tz_offset_minutes")
+      .select("id, telegram_id, first_name, tz_offset_minutes, digest_time")
       .single();
 
-    if (createError) throw createError;
+    if (createError) {
+      throw new Error(`Supabase error (create): ${createError.message}`);
+    }
     return created;
   }
 
@@ -49,10 +54,12 @@ export async function ensureUser(params: {
         tz_offset_minutes: desiredTz,
       })
       .eq("id", existing.id)
-      .select("id, telegram_id, first_name, tz_offset_minutes")
+      .select("id, telegram_id, first_name, tz_offset_minutes, digest_time")
       .single();
 
-    if (updateError) throw updateError;
+    if (updateError) {
+      throw new Error(`Supabase error (update): ${updateError.message}`);
+    }
     return updated;
   }
 

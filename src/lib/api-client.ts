@@ -26,6 +26,7 @@ export type YearGoal = {
 export type UserStatus = {
   firstName: string | null;
   date: string;
+  digestTime: string; // HH:mm
   yearGoals: YearGoal[];
   habits: Habit[];
   completedHabitIds: string[];

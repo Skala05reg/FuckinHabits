@@ -94,6 +94,7 @@ export async function GET(request: Request) {
     return Response.json({
       firstName: user.first_name ?? null,
       date,
+      digestTime: user.digest_time || "09:00",
       yearGoals: parsedGoals.map((g) => ({ id: g.id, title: g.title, position: g.position })),
       habits: parsedHabits,
       completedHabitIds,

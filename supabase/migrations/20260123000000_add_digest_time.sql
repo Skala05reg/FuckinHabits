@@ -1,0 +1,1 @@
+ALTER TABLE users ADD COLUMN digest_time TEXT DEFAULT '09:00';

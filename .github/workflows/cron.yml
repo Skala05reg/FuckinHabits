@@ -1,0 +1,16 @@
+name: Hourly Cron
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Runs at the start of every hour
+  workflow_dispatch: # Allows manual triggering
+
+jobs:
+  cron:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Hourly Cron Endpoint
+        run: |
+          curl -X POST 
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" 
+            ${{ secrets.APP_URL }}/api/cron/hourly

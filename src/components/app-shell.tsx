@@ -436,6 +436,22 @@ export default function AppShell() {
     await mutateHabitsList();
     await mutate();
   }
+  
+  const [digestTime, setDigestTime] = useState("");
+  useEffect(() => {
+    if (data?.digestTime) setDigestTime(data.digestTime);
+  }, [data?.digestTime]);
+
+  async function saveDigestTime() {
+    if (!digestTime) return;
+    await apiFetch("/api/user/settings", initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
+      method: "POST",
+      body: { digestTime },
+    });
+    await mutate();
+  }
 
   const [notesOpen, setNotesOpen] = useState(false);
   const [notesItems, setNotesItems] = useState<NotesHistoryItem[]>([]);
@@ -1058,6 +1074,23 @@ export default function AppShell() {
             <CardTitle>Настройки</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="space-y-3">
+              <div className="text-sm font-medium">Время утреннего дайджеста (МСК)</div>
+              <div className="flex gap-2">
+                <Input
+                  type="time"
+                  value={digestTime}
+                  onChange={(e) => setDigestTime(e.target.value)}
+                />
+                <Button variant="secondary" onClick={saveDigestTime}>
+                  Сохранить
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                Бот пришлет список задач в это время.
+              </div>
+            </div>
+
             <div className="space-y-3">
               <div className="text-sm font-medium">Цели на {currentYear}</div>
               <div className="flex gap-2">
