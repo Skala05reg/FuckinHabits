@@ -25,7 +25,6 @@ interface ClassificationResult {
 export async function classifyMessage(text: string): Promise<ClassificationResult> {
   const now = new Date();
   const today = now.toISOString().split("T")[0];
-  const year = now.getFullYear();
 
   const prompt = `
 You are a personal assistant.

@@ -461,7 +461,7 @@ export function getBot(): Bot {
       await ctx.reply("✍️ Записал в дневник.");
 
     } catch (e) {
-      console.error("Error processing message:", JSON.stringify(e, null, 2));
+      console.error("Error processing message:", e);
       if (e instanceof Error) console.error(e.stack);
       await ctx.reply("❌ Произошла ошибка при обработке сообщения. Проверь логи.");
     }

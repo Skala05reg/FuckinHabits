@@ -23,7 +23,8 @@ export async function ensureUser(params: {
     .maybeSingle();
 
   if (existingError) {
-    throw new Error(`Supabase error (existing): ${existingError.message}`);
+    const msg = existingError.message || String(existingError);
+    throw new Error(`Supabase error (lookup): ${msg}`);
   }
 
   if (!existing) {
@@ -38,7 +39,8 @@ export async function ensureUser(params: {
       .single();
 
     if (createError) {
-      throw new Error(`Supabase error (create): ${createError.message}`);
+      const msg = createError.message || String(createError);
+      throw new Error(`Supabase error (create): ${msg}`);
     }
     return created;
   }
@@ -58,7 +60,8 @@ export async function ensureUser(params: {
       .single();
 
     if (updateError) {
-      throw new Error(`Supabase error (update): ${updateError.message}`);
+      const msg = updateError.message || String(updateError);
+      throw new Error(`Supabase error (update): ${msg}`);
     }
     return updated;
   }

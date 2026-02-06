@@ -13,14 +13,6 @@ export async function sendDailyDigest(telegramId: number, tzOffsetMinutes: numbe
   const d = String(localTime.getUTCDate()).padStart(2, "0");
   const dateStr = `${y}-${m}-${d}`; // YYYY-MM-DD
   
-  const timeMin = `${dateStr}T00:00:00+03:00`; // Assuming Calendar events are stored/retrieved in a fixed offset or we should calculate dynamic ISO strings. 
-  // Actually, Google Calendar API `timeMin` expects an ISO string. 
-  // If we query for "User's current day", we should construct the range properly using their offset.
-  // BUT, the existing code hardcoded `+03:00` for Moscow. 
-  // If the user is in a different timezone, we should probably construct the query range in UTC or their offset.
-  // Let's stick to the existing pattern but be careful.
-  // Ideally: Start of day in user's timezone -> End of day in user's timezone.
-  
   // Construct ISO strings for the user's day
   // To get the correct query range, we can use the user's midnight.
   // localTime is currently "now" (e.g. 09:00 local).
@@ -94,8 +86,6 @@ export async function sendDailyDigest(telegramId: number, tzOffsetMinutes: numbe
                   // Let's just parse the hours/minutes directly from the string if we want to be safe, 
                   // OR use a fixed timezone if we know it (currently hardcoded to Moscow in original code).
                   // Let's try to be smart.
-                  const hours = dateObj.getHours().toString().padStart(2, '0');
-                  const mins = dateObj.getMinutes().toString().padStart(2, '0');
                   // This `dateObj.getHours()` uses the SERVER'S local time (UTC in Vercel).
                   // We need to shift it to User's time to display correct "09:00".
                   const userEventTime = new Date(dateObj.getTime() + tzOffsetMinutes * 60000);
