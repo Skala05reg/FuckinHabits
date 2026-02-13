@@ -64,3 +64,8 @@
 - OpenTelemetry specification concepts: https://opentelemetry.io/docs/concepts/signals/
 - O'Reilly book page for Designing Data-Intensive Applications: https://www.oreilly.com/library/view/designing-data-intensive-applications/9781491903063/
 
+### 2026-02-13 23:55:12 MSK (+0300) Addendum
+- Git commits pushed to `origin/main` successfully:
+  - `4690d62` refactor: harden cron delivery and centralize runtime config
+  - `e29db40` chore: keep workflow file unchanged for token-scope compatibility
+- Note: workflow-file fix could not be retained in pushed state because the available GitHub credential rejects workflow updates without `workflow` scope.

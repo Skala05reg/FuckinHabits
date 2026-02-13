@@ -36,3 +36,7 @@
 - `npm run lint`: passed.
 - `npm run build`: passed.
 - Deployment to Vercel is currently blocked in this environment due invalid/missing CLI auth token.
+
+### Git push note
+- Changes were pushed to `origin/main`.
+- `.github/workflows/cron.yml` improvement was reverted before final push due GitHub credential restriction (`workflow` scope missing for PAT on this machine).
