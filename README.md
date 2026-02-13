@@ -66,6 +66,7 @@ WEBAPP_URL=https://ваш-домен.vercel.app
 TELEGRAM_USER_ID=ваш_id_для_тестов
 TELEGRAM_WEBHOOK_SECRET=длинный_секрет_для_webhook
 TELEGRAM_BYPASS_AUTH=false
+TELEGRAM_BYPASS_AUTH_ALLOW_PROD=false
 
 # Supabase
 SUPABASE_URL=...
@@ -79,6 +80,7 @@ GOOGLE_SERVICE_ACCOUNT_JSON={...json_сервисного_аккаунта...}
 
 # Security
 CRON_SECRET=придумайте_сложный_пароль
+DEFAULT_EVENT_DURATION_MINUTES=30
 ```
 
 ### 3. Настройка базы данных

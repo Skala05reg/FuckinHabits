@@ -169,7 +169,7 @@ export function getBot(): Bot {
             let endT = endTime;
             if (!endT) {
               const [h, m] = startT.split(':').map(Number);
-              const totalMins = h * 60 + m + 30;
+              const totalMins = h * 60 + m + APP_CONFIG.defaultEventDurationMinutes;
               const endH = Math.floor(totalMins / 60) % 24;
               const endM = totalMins % 60;
               endT = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;

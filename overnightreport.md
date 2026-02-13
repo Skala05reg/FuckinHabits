@@ -164,3 +164,47 @@
 - OpenTelemetry concepts (observability quality): https://opentelemetry.io/docs/concepts/signals/
 - dbt data tests (analytics/data quality controls): https://docs.getdbt.com/docs/build/data-tests
 
+## 2026-02-14 00:10:03 MSK (+0300)
+
+### Deep-dive findings and fixes (this run)
+1. Consistency drift risk in reminder logic
+- Found duplicated “has data for date” checks across modules, increasing chance of behavioral drift.
+- Refactor:
+  - Added unified helper in `/Users/vodnik/Desktop/FuckinHabits/src/lib/db/day-data.ts`
+  - Reused in:
+    - `/Users/vodnik/Desktop/FuckinHabits/src/lib/features/reminders.ts`
+    - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/remind/route.ts`
+
+2. Secret-comparison hardening for cron authorization
+- Found direct string comparison for cron secret.
+- Refactor:
+  - Implemented constant-time compare + resilient Bearer parsing in `/Users/vodnik/Desktop/FuckinHabits/src/lib/cron-auth.ts`
+
+3. Hardcoded numeric parameter in bot scheduling
+- Found hardcoded default timed-event duration (`30` min).
+- Refactor:
+  - Moved to config `DEFAULT_EVENT_DURATION_MINUTES`:
+    - `/Users/vodnik/Desktop/FuckinHabits/src/config/app.ts`
+    - `/Users/vodnik/Desktop/FuckinHabits/src/lib/bot.ts`
+    - `/Users/vodnik/Desktop/FuckinHabits/.env.example`
+    - `/Users/vodnik/Desktop/FuckinHabits/README.md`
+
+4. Additional code hygiene
+- Removed extra `any` footprint/noisy classification logging in bot path.
+- Removed explicit `any` cast in Google calendar client creation.
+
+### Validation
+- `npm run lint` passed.
+- `npm run build` passed.
+
+### Deploy/log checks
+- `npx vercel --prod --yes` -> failed (invalid token).
+- `npx vercel logs --since 1h` -> failed (missing credentials).
+- Deploy and post-deploy logs are still blocked by auth state on this machine.
+
+### Sources reviewed for this run (inspiration/standards)
+- Google SRE book (availability/reliability design): https://sre.google/sre-book/table-of-contents/
+- dbt data tests (metric/data quality controls): https://docs.getdbt.com/docs/build/data-tests
+- OpenTelemetry signals (observability completeness): https://opentelemetry.io/docs/concepts/signals/
+- NIST SP 800-63B (auth verifier guidance): https://pages.nist.gov/800-63-4/sp800-63b.html
+

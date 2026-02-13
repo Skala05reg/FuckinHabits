@@ -59,4 +59,5 @@ export const APP_CONFIG = {
   llmAgentMaxTokens: envInt("LLM_AGENT_MAX_TOKENS", 512, { min: 128, max: 4096 }),
   llmClassifierTemperature: envFloat("LLM_CLASSIFIER_TEMPERATURE", 0.1, { min: 0, max: 1 }),
   llmAgentTemperature: envFloat("LLM_AGENT_TEMPERATURE", 0, { min: 0, max: 1 }),
+  defaultEventDurationMinutes: envInt("DEFAULT_EVENT_DURATION_MINUTES", 30, { min: 5, max: 8 * 60 }),
 } as const;

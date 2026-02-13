@@ -104,3 +104,34 @@
 - `npm run lint`: passed.
 - `npm run build`: passed.
 - Vercel deploy/log checks: blocked by missing/invalid credentials in current environment.
+
+## 2026-02-14 00:10 MSK
+
+### Additional delivery-quality refactor
+- Added shared day-data presence helper to remove duplicated logic and keep reminder behavior consistent:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/db/day-data.ts`
+  - integrated in `/Users/vodnik/Desktop/FuckinHabits/src/lib/features/reminders.ts`
+  - integrated in `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/remind/route.ts`
+
+### Security hardening
+- Cron secret checks are now constant-time and more robust Bearer parsing:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/cron-auth.ts`
+- Webhook secret constant-time compare remained active from prior pass.
+
+### Config hygiene
+- Added `DEFAULT_EVENT_DURATION_MINUTES` and used it instead of hardcoded `30` in bot timed-event creation:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/config/app.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/bot.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/.env.example`
+  - `/Users/vodnik/Desktop/FuckinHabits/README.md`
+
+### Code cleanup
+- Removed additional `any` pressure points and noisy classification logging in bot flow:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/bot.ts`
+- Simplified calendar client auth typing:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/google-calendar.ts`
+
+### Validation status
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- Vercel deploy/logs remain blocked by invalid/missing credentials in current environment.
