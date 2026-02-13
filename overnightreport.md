@@ -69,3 +69,47 @@
   - `4690d62` refactor: harden cron delivery and centralize runtime config
   - `e29db40` chore: keep workflow file unchanged for token-scope compatibility
 - Note: workflow-file fix could not be retained in pushed state because the available GitHub credential rejects workflow updates without `workflow` scope.
+## 2026-02-14 00:00:50 MSK (+0300)
+
+### What I reviewed in this run
+- Re-scanned all project files and re-focused on remaining quality gaps in security, data/report alignment, and date handling.
+- Checked for Instantly integration references in repo: none found (`instantly` string search returned no matches).
+
+### Additional refactors completed
+1. Webhook security:
+- Added optional Telegram webhook secret validation via `x-telegram-bot-api-secret-token`:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/webhook-auth.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/webhook/route.ts`
+- Added env var in config template:
+  - `/Users/vodnik/Desktop/FuckinHabits/.env.example`
+
+2. Birthdays API hardening:
+- Added strict `zod` validation for create/update inputs (`name`, `date`) and cleaner status handling:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/birthdays/route.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/birthdays/[id]/route.ts`
+
+3. Birthdays date consistency (timezone-safe):
+- Replaced JS Date parsing of `YYYY-MM-DD` with deterministic month/day parser in UI to avoid offset drift:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/birthdays/page.tsx`
+
+4. Metrics alignment with actual DB events:
+- `stats/summary`: `daysWithAnyCompletion` now counts real completion facts for the entire period, not just currently active habits.
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/stats/summary/route.ts`
+- `stats/heatmap` (`metric=habits`): denominator now uses all user habits (not only active) to reduce historical report drift after deactivation.
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/stats/heatmap/route.ts`
+
+### Validation
+- `npm run lint` passed.
+- `npm run build` passed.
+
+### Deploy/log checks
+- Deploy attempt: `npx vercel --prod --yes` -> failed due invalid token.
+- Logs attempt: `npx vercel logs --since 1h` -> failed due missing credentials.
+- Result: deploy/log verification is blocked in this environment until valid Vercel auth is available.
+
+### External references checked this run (inspiration/validation)
+- Telegram Bot API (webhook secret token header): https://core.telegram.org/bots/api#setwebhook
+- OpenTelemetry docs (signal quality/observability): https://opentelemetry.io/docs/concepts/signals/
+- dbt docs for data quality testing patterns: https://docs.getdbt.com/docs/build/data-tests
+- Google Calendar API reference: https://developers.google.com/workspace/calendar/api/v3/reference/events/list
+

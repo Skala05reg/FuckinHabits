@@ -122,21 +122,15 @@ export async function GET(request: Request) {
       title: String((h as { title: unknown }).title),
     }));
 
-    const habitIds = habitList.map((h) => h.id);
+    const { data: hc, error: hcErr } = await supabaseAdmin
+      .from("habit_completions")
+      .select("date,habit_id")
+      .eq("user_id", user.id)
+      .gte("date", from)
+      .lte("date", to);
 
-    let completionRows: Array<{ date: string; habit_id: string }> = [];
-    if (habitIds.length) {
-      const { data: hc, error: hcErr } = await supabaseAdmin
-        .from("habit_completions")
-        .select("date,habit_id")
-        .eq("user_id", user.id)
-        .in("habit_id", habitIds)
-        .gte("date", from)
-        .lte("date", to);
-
-      if (hcErr) throw hcErr;
-      completionRows = z.array(CompletionRow).parse(hc ?? []);
-    }
+    if (hcErr) throw hcErr;
+    const completionRows: Array<{ date: string; habit_id: string }> = z.array(CompletionRow).parse(hc ?? []);
 
     const byHabit = new Map<string, Set<string>>();
     for (const r of completionRows) {

@@ -40,3 +40,30 @@
 ### Git push note
 - Changes were pushed to `origin/main`.
 - `.github/workflows/cron.yml` improvement was reverted before final push due GitHub credential restriction (`workflow` scope missing for PAT on this machine).
+
+## 2026-02-14 00:00 MSK
+
+### Security hardening
+- Added optional Telegram webhook secret verification in `/Users/vodnik/Desktop/FuckinHabits/src/lib/webhook-auth.ts` and enforced it in `/Users/vodnik/Desktop/FuckinHabits/src/app/api/webhook/route.ts`.
+- Webhook now returns `401` for invalid secret when `TELEGRAM_WEBHOOK_SECRET` is configured.
+
+### Data quality and metric consistency
+- Fixed summary aggregation to count `daysWithAnyCompletion` from all real completion events in range (not only from currently active habits):
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/stats/summary/route.ts`
+- Fixed heatmap `metric=habits` denominator source to include all user habits (active + inactive), preventing historical distortion after deactivations:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/stats/heatmap/route.ts`
+
+### Birthdays quality pass
+- Added strict `zod` validation for birthday create/update payloads and tightened selected fields in responses:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/birthdays/route.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/birthdays/[id]/route.ts`
+- Removed timezone-sensitive `new Date(YYYY-MM-DD)` parsing from birthdays UI and replaced with deterministic ISO month/day parsing:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/birthdays/page.tsx`
+
+### Config updates
+- Added `TELEGRAM_WEBHOOK_SECRET` to `/Users/vodnik/Desktop/FuckinHabits/.env.example`.
+
+### Validation status
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- `vercel --prod` and `vercel logs`: blocked due missing/invalid CLI credentials in this environment.

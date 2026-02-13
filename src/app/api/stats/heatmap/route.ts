@@ -78,8 +78,7 @@ export async function GET(request: Request) {
       const { data: habits, error: habitsError } = await supabaseAdmin
         .from("habits")
         .select("id")
-        .eq("user_id", user.id)
-        .eq("is_active", true);
+        .eq("user_id", user.id);
 
       if (habitsError) throw habitsError;
       const habitIds = (habits ?? []).map((h) => String((h as { id: unknown }).id));

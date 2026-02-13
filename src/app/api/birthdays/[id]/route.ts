@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getTelegramAuthOrThrow } from "@/lib/api-auth";
 import { ensureUser } from "@/lib/db/users";
@@ -5,6 +6,11 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const UpdateBirthdaySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
 
 export async function PUT(
     request: Request,
@@ -15,8 +21,7 @@ export async function PUT(
         const user = await ensureUser({ telegramId, firstName });
         const { id } = await params;
 
-        const body = await request.json();
-        const { name, date } = body;
+        const { name, date } = UpdateBirthdaySchema.parse(await request.json());
 
         const supabase = getSupabaseAdmin();
 
@@ -42,7 +47,7 @@ export async function PUT(
                 date,
             })
             .eq("id", id)
-            .select()
+            .select("id,name,date,created_at,user_id")
             .single();
 
         if (error) {
@@ -52,9 +57,10 @@ export async function PUT(
 
         return NextResponse.json({ birthday: updated });
     } catch (e: unknown) {
-        const error = e instanceof Error ? e : new Error(String(e));
-        console.error("API Error", error);
-        return NextResponse.json({ error: error.message }, { status: 401 });
+        const msg = e instanceof Error ? e.message : "Unknown error";
+        console.error("API Error", e);
+        const status = msg.includes("initData") || msg.includes("telegram") ? 401 : 400;
+        return NextResponse.json({ error: msg }, { status });
     }
 }
 
@@ -96,8 +102,9 @@ export async function DELETE(
 
         return NextResponse.json({ success: true });
     } catch (e: unknown) {
-        const error = e instanceof Error ? e : new Error(String(e));
-        console.error("API Error", error);
-        return NextResponse.json({ error: error.message }, { status: 401 });
+        const msg = e instanceof Error ? e.message : "Unknown error";
+        console.error("API Error", e);
+        const status = msg.includes("initData") || msg.includes("telegram") ? 401 : 400;
+        return NextResponse.json({ error: msg }, { status });
     }
 }

@@ -1,3 +1,4 @@
+import { z } from "zod";
 import { NextResponse } from "next/server";
 import { getTelegramAuthOrThrow } from "@/lib/api-auth";
 import { ensureUser } from "@/lib/db/users";
@@ -5,6 +6,11 @@ import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const BirthdayBodySchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+});
 
 export async function GET(request: Request) {
   try {
@@ -14,7 +20,7 @@ export async function GET(request: Request) {
     const supabase = getSupabaseAdmin();
     const { data: birthdays, error } = await supabase
       .from("birthdays")
-      .select("*")
+      .select("id,name,date,created_at,user_id")
       .eq("user_id", user.id)
       .order("date", { ascending: true }); // We might want to sort by MM-DD in code
 
@@ -39,12 +45,7 @@ export async function POST(request: Request) {
     const { telegramId, firstName } = await getTelegramAuthOrThrow(request);
     const user = await ensureUser({ telegramId, firstName });
 
-    const body = await request.json();
-    const { name, date } = body;
-
-    if (!name || !date) {
-      return NextResponse.json({ error: "Missing name or date" }, { status: 400 });
-    }
+    const { name, date } = BirthdayBodySchema.parse(await request.json());
 
     const supabase = getSupabaseAdmin();
     const { data: created, error } = await supabase
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
         name,
         date, // YYYY-MM-DD
       })
-      .select()
+      .select("id,name,date,created_at,user_id")
       .single();
 
     if (error) {
@@ -64,8 +65,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ birthday: created });
   } catch (e: unknown) {
-    const error = e instanceof Error ? e : new Error(String(e));
-    console.error("API Error", error);
-    return NextResponse.json({ error: error.message }, { status: 401 });
+    const msg = e instanceof Error ? e.message : "Unknown error";
+    console.error("API Error", e);
+    const status = msg.includes("initData") || msg.includes("telegram") ? 401 : 400;
+    return NextResponse.json({ error: msg }, { status });
   }
 }

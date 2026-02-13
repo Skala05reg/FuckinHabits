@@ -56,6 +56,17 @@ const MONTHS = [
     "July", "August", "September", "October", "November", "December"
 ];
 
+function parseMonthDayFromIso(date: string): { month: number; day: number } {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date);
+    if (!m) return { month: 0, day: 1 };
+    const month = Number(m[2]) - 1;
+    const day = Number(m[3]);
+    if (!Number.isInteger(month) || month < 0 || month > 11 || !Number.isInteger(day) || day < 1 || day > 31) {
+        return { month: 0, day: 1 };
+    }
+    return { month, day };
+}
+
 function getDaysInMonth(monthIndex: number, year: number = 2024) {
     return new Date(year, monthIndex + 1, 0).getDate();
 }
@@ -90,10 +101,8 @@ export default function BirthdaysPage() {
 
         return [...birthdays].sort((a, b) => {
             const getNextDate = (dStr: string) => {
-                const d = new Date(dStr);
-                const m = d.getMonth();
-                const day = d.getDate();
-                const next = new Date(currentYear, m, day);
+                const md = parseMonthDayFromIso(dStr);
+                const next = new Date(currentYear, md.month, md.day);
                 if (next < today) {
                     next.setFullYear(currentYear + 1);
                 }
@@ -152,9 +161,9 @@ export default function BirthdaysPage() {
 
     const startEdit = (b: Birthday) => {
         setName(b.name);
-        const d = new Date(b.date);
-        setMonth(d.getMonth());
-        setDay(d.getDate());
+        const md = parseMonthDayFromIso(b.date);
+        setMonth(md.month);
+        setDay(md.day);
         setEditingId(b.id);
         setIsAdding(true);
     };
@@ -241,8 +250,8 @@ export default function BirthdaysPage() {
             ) : (
                 <div className="space-y-3">
                     {sortedBirthdays.map((b) => {
-                        const bDate = new Date(b.date);
-                        const dateStr = bDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric' });
+                        const md = parseMonthDayFromIso(b.date);
+                        const dateStr = `${MONTHS[md.month]} ${md.day}`;
                         return (
                             <Card key={b.id}>
                                 <CardContent className="p-4 flex items-center justify-between">
