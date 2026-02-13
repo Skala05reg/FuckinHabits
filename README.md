@@ -64,6 +64,8 @@ npm install
 TELEGRAM_BOT_TOKEN=ваш_токен
 WEBAPP_URL=https://ваш-домен.vercel.app
 TELEGRAM_USER_ID=ваш_id_для_тестов
+TELEGRAM_WEBHOOK_SECRET=длинный_секрет_для_webhook
+TELEGRAM_BYPASS_AUTH=false
 
 # Supabase
 SUPABASE_URL=...

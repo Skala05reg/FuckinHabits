@@ -67,3 +67,40 @@
 - `npm run lint`: passed.
 - `npm run build`: passed.
 - `vercel --prod` and `vercel logs`: blocked due missing/invalid CLI credentials in this environment.
+
+## 2026-02-14 00:05 MSK
+
+### Cron performance and reliability refactor
+- Added batched async executor to control cron parallelism:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/async.ts`
+- Switched cron routes to bounded batch processing using config-driven limits:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/hourly/route.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/remind/route.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/remind-missing/route.ts`
+- Removed heavy N+1 query pattern from missing-reminders flow by loading date ranges once per user and evaluating in memory.
+
+### Security and auth hardening
+- Telegram Mini App bypass auth is now production-gated unless explicitly allowed by env:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/api-auth.ts`
+- Webhook secret validation switched to constant-time comparison:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/webhook-auth.ts`
+
+### Code quality cleanup
+- Removed unnecessary `any` usage and noisy runtime classification logs in bot flow:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/bot.ts`
+- Removed `any` cast from calendar client creation:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/google-calendar.ts`
+
+### Config/documentation sync
+- Added new runtime config knobs:
+  - `CRON_PROCESS_BATCH_SIZE`
+  - `REMIND_MISSING_LOOKBACK_DAYS`
+  - `TELEGRAM_BYPASS_AUTH_ALLOW_PROD`
+- Updated config templates/docs:
+  - `/Users/vodnik/Desktop/FuckinHabits/.env.example`
+  - `/Users/vodnik/Desktop/FuckinHabits/README.md`
+
+### Validation status
+- `npm run lint`: passed.
+- `npm run build`: passed.
+- Vercel deploy/log checks: blocked by missing/invalid credentials in current environment.

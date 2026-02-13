@@ -1,8 +1,10 @@
 import { APP_CONFIG } from "@/config/app";
 import { InlineKeyboard } from "grammy";
 
+import { mapSettledInBatches } from "@/lib/async";
 import { getBot } from "@/lib/bot";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { shiftIsoDate } from "@/lib/date-time";
 import { getLogicalDate } from "@/lib/logical-date";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -27,36 +29,42 @@ async function runRemindMissing(request: Request) {
     await bot.init();
     const appUrl = process.env.WEBAPP_URL;
 
-    const results = await Promise.allSettled(
-      (users ?? []).map(async (user) => {
+    const results = await mapSettledInBatches(
+      users ?? [],
+      APP_CONFIG.cronProcessBatchSize,
+      async (user) => {
         const tzOffsetMinutes = user.tz_offset_minutes ?? 0;
         const today = getLogicalDate(new Date(), tzOffsetMinutes);
 
-        // Check last 7 days for missing data
+        const lookbackDays = APP_CONFIG.remindMissingLookbackDays;
+        const oldestDate = shiftIsoDate(today, -lookbackDays);
+        const latestDate = shiftIsoDate(today, -1);
+
+        const [{ data: dayLogs, error: dayLogsError }, { data: completions, error: completionsError }] =
+          await Promise.all([
+            supabaseAdmin
+              .from("daily_logs")
+              .select("date")
+              .eq("user_id", user.id)
+              .gte("date", oldestDate)
+              .lte("date", latestDate),
+            supabaseAdmin
+              .from("habit_completions")
+              .select("date")
+              .eq("user_id", user.id)
+              .gte("date", oldestDate)
+              .lte("date", latestDate),
+          ]);
+        if (dayLogsError) throw dayLogsError;
+        if (completionsError) throw completionsError;
+
+        const dayLogDates = new Set((dayLogs ?? []).map((row) => String(row.date)));
+        const completionDates = new Set((completions ?? []).map((row) => String(row.date)));
+
         const missingDays: string[] = [];
-        for (let i = 1; i <= 7; i++) {
-          const d = new Date(`${today}T00:00:00Z`);
-          d.setUTCDate(d.getUTCDate() - i);
-          const date = d.toISOString().slice(0, 10);
-
-          // Check if daily_log exists for this date
-          const { data: dayLog } = await supabaseAdmin
-            .from("daily_logs")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("date", date)
-            .maybeSingle();
-
-          // Check if any habits were completed
-          const { data: completions } = await supabaseAdmin
-            .from("habit_completions")
-            .select("id")
-            .eq("user_id", user.id)
-            .eq("date", date)
-            .limit(1);
-
-          // If no daily_log and no habit completions, consider it missing
-          if (!dayLog && (!completions || completions.length === 0)) {
+        for (let i = 1; i <= lookbackDays; i++) {
+          const date = shiftIsoDate(today, -i);
+          if (!dayLogDates.has(date) && !completionDates.has(date)) {
             missingDays.push(date);
           }
         }
@@ -79,7 +87,7 @@ async function runRemindMissing(request: Request) {
         );
 
         return { sent: true, missingDays: missingDays.length };
-      }),
+      },
     );
 
     const ok = results.filter((r) => r.status === "fulfilled" && r.value.sent).length;

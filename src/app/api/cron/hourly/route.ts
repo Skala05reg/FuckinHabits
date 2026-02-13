@@ -1,4 +1,5 @@
 import { APP_CONFIG } from "@/config/app";
+import { mapSettledInBatches } from "@/lib/async";
 import { requireCronAuth } from "@/lib/cron-auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { sendDailyDigest } from "@/lib/features/digest";
@@ -34,8 +35,10 @@ async function runHourly(request: Request) {
 
     if (error) throw error;
 
-    const results = await Promise.allSettled(
-      (users ?? []).map(async (user) => {
+    const results = await mapSettledInBatches(
+      users ?? [],
+      APP_CONFIG.cronProcessBatchSize,
+      async (user) => {
         const tzOffset = user.tz_offset_minutes ?? 0;
         const now = new Date();
         
@@ -78,7 +81,7 @@ async function runHourly(request: Request) {
         }
 
         return { userId: user.id, actions };
-      })
+      },
     );
 
     const summary = results.map((r) => (r.status === "fulfilled" ? r.value : r.reason));

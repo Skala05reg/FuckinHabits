@@ -113,3 +113,54 @@
 - dbt docs for data quality testing patterns: https://docs.getdbt.com/docs/build/data-tests
 - Google Calendar API reference: https://developers.google.com/workspace/calendar/api/v3/reference/events/list
 
+## 2026-02-14 00:05:51 MSK (+0300)
+
+### What I found and improved this pass
+1. Cron scalability risk (high query and send fan-out)
+- Found: cron handlers processed large user sets with unbounded `Promise.allSettled` and, for missing reminders, per-day/per-user DB queries (N+1 pattern).
+- Refactor done:
+  - added batch executor `/Users/vodnik/Desktop/FuckinHabits/src/lib/async.ts`
+  - added bounded processing in
+    - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/hourly/route.ts`
+    - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/remind/route.ts`
+    - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/remind-missing/route.ts`
+  - replaced N+1 in `remind-missing` by range fetch + in-memory date-set check.
+
+2. Security hardening for auth bypass
+- Found: `TELEGRAM_BYPASS_AUTH=true` could potentially be applied in production.
+- Refactor done:
+  - bypass now allowed in production only with explicit `TELEGRAM_BYPASS_AUTH_ALLOW_PROD=true`:
+    - `/Users/vodnik/Desktop/FuckinHabits/src/lib/api-auth.ts`
+
+3. Webhook secret check improvement
+- Found: webhook secret was checked with plain equality.
+- Refactor done:
+  - moved to constant-time compare to avoid timing leakage:
+    - `/Users/vodnik/Desktop/FuckinHabits/src/lib/webhook-auth.ts`
+
+4. Code hygiene / maintainability
+- Removed unnecessary `any` in bot/calendar code and removed noisy classification logging:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/bot.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/google-calendar.ts`
+
+5. Config and docs consistency
+- Added env-controlled knobs for cron processing and prod bypass policy:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/config/app.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/.env.example`
+- Updated docs env snippet:
+  - `/Users/vodnik/Desktop/FuckinHabits/README.md`
+
+### Validation
+- `npm run lint` passed.
+- `npm run build` passed.
+
+### Vercel deploy/log check
+- `npx vercel --prod --yes` failed: invalid token.
+- `npx vercel logs --since 1h` failed: no credentials.
+- This environment still blocks deploy/log verification until valid Vercel auth is present.
+
+### External references checked this pass
+- Google SRE Book (reliability patterns): https://sre.google/sre-book/table-of-contents/
+- OpenTelemetry concepts (observability quality): https://opentelemetry.io/docs/concepts/signals/
+- dbt data tests (analytics/data quality controls): https://docs.getdbt.com/docs/build/data-tests
+

@@ -18,7 +18,9 @@ export async function getTelegramAuthOrThrow(
 ): Promise<AuthedTelegramUser> {
   const url = new URL(request.url);
 
-  const bypass = process.env.TELEGRAM_BYPASS_AUTH === "true";
+  const bypassFlag = process.env.TELEGRAM_BYPASS_AUTH === "true";
+  const bypassAllowedInProd = process.env.TELEGRAM_BYPASS_AUTH_ALLOW_PROD === "true";
+  const bypass = bypassFlag && (process.env.NODE_ENV !== "production" || bypassAllowedInProd);
   const mockTelegramId = parseTelegramId(url.searchParams.get("mockTelegramId"));
   if (bypass && mockTelegramId !== null) {
     return { telegramId: mockTelegramId };

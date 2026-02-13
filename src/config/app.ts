@@ -49,6 +49,8 @@ export const APP_CONFIG = {
   }),
   cronUsersBatchLimit: envInt("CRON_USERS_BATCH_LIMIT", 5000, { min: 1, max: 20_000 }),
   cronMinuteTolerance: envInt("CRON_MINUTE_TOLERANCE", 5, { min: 0, max: 30 }),
+  cronProcessBatchSize: envInt("CRON_PROCESS_BATCH_SIZE", 25, { min: 1, max: 500 }),
+  remindMissingLookbackDays: envInt("REMIND_MISSING_LOOKBACK_DAYS", 7, { min: 1, max: 30 }),
   telegramButtonTextLimit: envInt("TELEGRAM_BUTTON_TEXT_LIMIT", 40, { min: 10, max: 128 }),
   telegramButtonTextTruncateTo: envInt("TELEGRAM_BUTTON_TEXT_TRUNCATE_TO", 37, { min: 5, max: 127 }),
   notesDefaultPageSize: envInt("NOTES_DEFAULT_PAGE_SIZE", 10, { min: 1, max: 50 }),

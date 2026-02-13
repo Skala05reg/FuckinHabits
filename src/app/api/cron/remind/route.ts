@@ -1,8 +1,10 @@
 import { APP_CONFIG } from "@/config/app";
 import { InlineKeyboard } from "grammy";
 
+import { mapSettledInBatches } from "@/lib/async";
 import { getBot } from "@/lib/bot";
 import { requireCronAuth } from "@/lib/cron-auth";
+import { shiftIsoDate } from "@/lib/date-time";
 import { getLogicalDate } from "@/lib/logical-date";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -27,31 +29,32 @@ async function runReminder(request: Request) {
     await bot.init();
     const appUrl = process.env.WEBAPP_URL;
 
-    const results = await Promise.allSettled(
-      (users ?? []).map(async (user) => {
+    const results = await mapSettledInBatches(
+      users ?? [],
+      APP_CONFIG.cronProcessBatchSize,
+      async (user) => {
         const tzOffsetMinutes = user.tz_offset_minutes ?? 0;
         const today = getLogicalDate(new Date(), tzOffsetMinutes);
 
-        // Check yesterday for missing data
-        const yesterday = new Date(`${today}T00:00:00Z`);
-        yesterday.setUTCDate(yesterday.getUTCDate() - 1);
-        const yesterdayDate = yesterday.toISOString().slice(0, 10);
+        const yesterdayDate = shiftIsoDate(today, -1);
 
-        // Check if daily_log exists for yesterday
-        const { data: dayLog } = await supabaseAdmin
-          .from("daily_logs")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("date", yesterdayDate)
-          .maybeSingle();
-
-        // Check if any habits were completed yesterday
-        const { data: completions } = await supabaseAdmin
-          .from("habit_completions")
-          .select("id")
-          .eq("user_id", user.id)
-          .eq("date", yesterdayDate)
-          .limit(1);
+        const [{ data: dayLog, error: dayLogError }, { data: completions, error: completionsError }] =
+          await Promise.all([
+            supabaseAdmin
+              .from("daily_logs")
+              .select("id")
+              .eq("user_id", user.id)
+              .eq("date", yesterdayDate)
+              .maybeSingle(),
+            supabaseAdmin
+              .from("habit_completions")
+              .select("id")
+              .eq("user_id", user.id)
+              .eq("date", yesterdayDate)
+              .limit(1),
+          ]);
+        if (dayLogError) throw dayLogError;
+        if (completionsError) throw completionsError;
 
         const hasData = dayLog || (completions && completions.length > 0);
 
@@ -69,7 +72,7 @@ async function runReminder(request: Request) {
         );
 
         return { sent: true, hadData: hasData };
-      }),
+      },
     );
 
     const ok = results.filter((r) => r.status === "fulfilled").length;

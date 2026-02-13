@@ -24,7 +24,6 @@ function getAuth() {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const getCalendar = () => google.calendar({ version: "v3", auth: getAuth() as any });
+export const getCalendar = () => google.calendar({ version: "v3", auth: getAuth() });
 
 export const GOOGLE_CALENDAR_ID = process.env.GOOGLE_CALENDAR_ID || "primary";

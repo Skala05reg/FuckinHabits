@@ -1,4 +1,5 @@
 import { Bot, InlineKeyboard } from "grammy";
+import { calendar_v3 } from "googleapis";
 
 import { APP_CONFIG } from "@/config/app";
 import { getDateInTimeZone, formatOffsetMinutes, shiftIsoDate } from "@/lib/date-time";
@@ -144,7 +145,6 @@ export function getBot(): Bot {
     try {
       const user = await ensureUser({ telegramId, firstName: ctx.from?.first_name });
       const classification = await classifyMessage(text);
-      console.log("Message classification:", classification);
 
       // --- 1. Schedule Event ---
       if (classification.intent === "schedule_event" && classification.scheduleDetails) {
@@ -211,10 +211,8 @@ export function getBot(): Bot {
           return;
         }
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const timed: any[] = [];
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const allDay: any[] = [];
+        const timed: calendar_v3.Schema$Event[] = [];
+        const allDay: calendar_v3.Schema$Event[] = [];
 
         for (const e of events) {
             if (e.start?.dateTime) timed.push(e);
@@ -333,8 +331,7 @@ export function getBot(): Bot {
         const originalEvent = events.find(e => e.id === eventId);
         if (!originalEvent) return;
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const requestBody: any = {};
+        const requestBody: Partial<calendar_v3.Schema$Event> = {};
         
         if (originalEvent.start?.date) {
             // Was All-day
