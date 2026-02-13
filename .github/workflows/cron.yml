@@ -11,6 +11,7 @@ jobs:
     steps:
       - name: Call Hourly Cron Endpoint
         run: |
-          curl -X POST 
-            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" 
-            ${{ secrets.APP_URL }}/api/cron/hourly
+          curl --fail --show-error --silent \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.APP_URL }}/api/cron/hourly"

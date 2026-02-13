@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { APP_CONFIG } from "@/config/app";
 import { getTelegramAuthOrThrow, getTzOffsetMinutes } from "@/lib/api-auth";
 import { ensureUser } from "@/lib/db/users";
 import { getLogicalDate } from "@/lib/logical-date";
@@ -94,7 +95,7 @@ export async function GET(request: Request) {
     return Response.json({
       firstName: user.first_name ?? null,
       date,
-      digestTime: user.digest_time || "09:00",
+      digestTime: user.digest_time || APP_CONFIG.defaultDigestTime,
       yearGoals: parsedGoals.map((g) => ({ id: g.id, title: g.title, position: g.position })),
       habits: parsedHabits,
       completedHabitIds,

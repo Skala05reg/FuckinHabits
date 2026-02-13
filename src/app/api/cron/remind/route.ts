@@ -1,25 +1,25 @@
+import { APP_CONFIG } from "@/config/app";
 import { InlineKeyboard } from "grammy";
 
 import { getBot } from "@/lib/bot";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { getLogicalDate } from "@/lib/logical-date";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+async function runReminder(request: Request) {
   try {
-    const secret = request.headers.get("x-cron-secret");
-    if (!process.env.CRON_SECRET || secret !== process.env.CRON_SECRET) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const unauthorized = requireCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     const supabaseAdmin = getSupabaseAdmin();
 
     const { data: users, error } = await supabaseAdmin
       .from("users")
       .select("id, telegram_id, tz_offset_minutes")
-      .limit(5000);
+      .limit(APP_CONFIG.cronUsersBatchLimit);
 
     if (error) throw error;
 
@@ -83,4 +83,12 @@ export async function POST(request: Request) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return Response.json({ error: msg }, { status: 400 });
   }
+}
+
+export async function POST(request: Request) {
+  return runReminder(request);
+}
+
+export async function GET(request: Request) {
+  return runReminder(request);
 }

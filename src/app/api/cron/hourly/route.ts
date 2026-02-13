@@ -1,3 +1,5 @@
+import { APP_CONFIG } from "@/config/app";
+import { requireCronAuth } from "@/lib/cron-auth";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { sendDailyDigest } from "@/lib/features/digest";
 import { sendJournalReminder } from "@/lib/features/reminders";
@@ -5,19 +7,30 @@ import { sendJournalReminder } from "@/lib/features/reminders";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+function parseDigestTime(raw: string | null | undefined): { hour: number; minute: number } {
+  const fallback = APP_CONFIG.defaultDigestTime;
+  const value = raw ?? fallback;
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value);
+  if (!m) {
+    const fb = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(fallback);
+    if (!fb) return { hour: 9, minute: 0 };
+    return { hour: Number(fb[1]), minute: Number(fb[2]) };
+  }
+  return { hour: Number(m[1]), minute: Number(m[2]) };
+}
+
+async function runHourly(request: Request) {
   try {
-    const authHeader = request.headers.get("authorization");
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const unauthorized = requireCronAuth(request);
+    if (unauthorized) return unauthorized;
 
     const supabaseAdmin = getSupabaseAdmin();
 
     // Fetch all users
     const { data: users, error } = await supabaseAdmin
       .from("users")
-      .select("id, telegram_id, tz_offset_minutes");
+      .select("id, telegram_id, tz_offset_minutes, digest_time")
+      .limit(APP_CONFIG.cronUsersBatchLimit);
 
     if (error) throw error;
 
@@ -27,15 +40,25 @@ export async function POST(request: Request) {
         const now = new Date();
         
         // Calculate User's Local Time
-        const userLocalTime = new Date(now.getTime() + tzOffset * 60000);
+        const userLocalTime = new Date(now.getTime() + tzOffset * 60_000);
         const userHour = userLocalTime.getUTCHours();
+        const userMinute = userLocalTime.getUTCMinutes();
+        const { hour: digestHour, minute: digestMinute } = parseDigestTime(
+          String((user as { digest_time?: string | null }).digest_time ?? ""),
+        );
+        const minuteDelta = Math.abs(userMinute - digestMinute);
+        const minuteMatch = minuteDelta <= APP_CONFIG.cronMinuteTolerance;
         
         const actions = [];
 
-        // 1. 9:00 AM -> Send Daily Digest
-        if (userHour === 9) {
+        // Hourly cron cannot guarantee minute precision; we honor user hour reliably.
+        if (userHour === digestHour) {
              const sent = await sendDailyDigest(user.telegram_id, tzOffset);
-             actions.push(sent ? "digest_sent" : "digest_failed");
+             if (minuteMatch) {
+               actions.push(sent ? "digest_sent" : "digest_failed");
+             } else {
+               actions.push(sent ? "digest_sent_hour_fallback" : "digest_failed");
+             }
         }
 
         // 2. 00:00 (Midnight) -> Send Journal Reminder for the ending day
@@ -58,11 +81,19 @@ export async function POST(request: Request) {
       })
     );
 
-    const summary = results.map(r => r.status === 'fulfilled' ? r.value : r.reason);
+    const summary = results.map((r) => (r.status === "fulfilled" ? r.value : r.reason));
 
     return Response.json({ ok: true, summary });
   } catch (e) {
     console.error("Hourly cron error:", e);
     return Response.json({ error: e instanceof Error ? e.message : "Unknown error" }, { status: 500 });
   }
+}
+
+export async function POST(request: Request) {
+  return runHourly(request);
+}
+
+export async function GET(request: Request) {
+  return runHourly(request);
 }

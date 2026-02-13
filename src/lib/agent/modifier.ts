@@ -1,3 +1,5 @@
+import { buildModifyPrompt } from "@/config/agent-prompts";
+import { APP_CONFIG } from "@/config/app";
 import { llm, GLM_MODEL } from "@/lib/llm";
 
 interface CalendarEvent {
@@ -14,30 +16,14 @@ export async function identifyEventToModify(
     .map((e, index) => `${index + 1}. [ID: ${e.id}] "${e.summary}" (Time: ${e.start})`)
     .join("\n");
 
-  const prompt = `
-You are a smart calendar assistant.
-The user wants to RESCHEDULE (move) a specific event.
-
-User Query: "${userQuery}"
-
-Available events:
-${eventsList}
-
-Identify which event matches the user's description best.
-Return a JSON object with a single "id".
-If no event matches clearly, return null id.
-
-Example: { "id": "eventId123" }
-
-IMPORTANT: Return ONLY valid JSON.
-`;
+  const prompt = buildModifyPrompt({ userQuery, eventsList });
 
   try {
     const response = await llm.messages.create({
       model: GLM_MODEL,
-      max_tokens: 512,
+      max_tokens: APP_CONFIG.llmAgentMaxTokens,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.0,
+      temperature: APP_CONFIG.llmAgentTemperature,
     });
 
     const block = response.content[0];

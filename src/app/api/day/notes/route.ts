@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { APP_CONFIG } from "@/config/app";
 import { getTelegramAuthOrThrow, getTzOffsetMinutes } from "@/lib/api-auth";
 import { ensureUser } from "@/lib/db/users";
 import { getLogicalDate } from "@/lib/logical-date";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 const QuerySchema = z.object({
   cursor: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  limit: z.coerce.number().int().min(1).max(50).optional(),
+  limit: z.coerce.number().int().min(1).max(APP_CONFIG.notesMaxPageSize).optional(),
 });
 
 const NoteRow = z.object({
@@ -30,7 +31,7 @@ export async function GET(request: Request) {
       limit: url.searchParams.get("limit") ?? undefined,
     });
 
-    const pageSize = limit ?? 10;
+    const pageSize = limit ?? APP_CONFIG.notesDefaultPageSize;
 
     const supabaseAdmin = getSupabaseAdmin();
 

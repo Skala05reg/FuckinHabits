@@ -3,9 +3,8 @@ import { google } from "googleapis";
 function getAuth() {
   const json = process.env.GOOGLE_SERVICE_ACCOUNT_JSON;
   if (!json) {
-    // Return null or throw only when called in production
-    if (process.env.NODE_ENV === "production" && !process.env.VERCEL) {
-        throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_JSON");
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("Missing GOOGLE_SERVICE_ACCOUNT_JSON");
     }
     return undefined;
   }
@@ -17,6 +16,9 @@ function getAuth() {
         scopes: ["https://www.googleapis.com/auth/calendar"],
     });
   } catch (e) {
+      if (process.env.NODE_ENV === "production") {
+        throw new Error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON");
+      }
       console.error("Failed to parse GOOGLE_SERVICE_ACCOUNT_JSON", e);
       return undefined;
   }

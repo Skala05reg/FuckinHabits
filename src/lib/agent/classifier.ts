@@ -1,3 +1,5 @@
+import { buildClassifierPrompt } from "@/config/agent-prompts";
+import { APP_CONFIG } from "@/config/app";
 import { llm, GLM_MODEL } from "@/lib/llm";
 
 export type Intent = "schedule_event" | "get_events" | "delete_event" | "reschedule_event" | "mark_done" | "journal" | "other";
@@ -26,70 +28,14 @@ export async function classifyMessage(text: string): Promise<ClassificationResul
   const now = new Date();
   const today = now.toISOString().split("T")[0];
 
-  const prompt = `
-You are a personal assistant.
-Classify the user message into one of these intents:
-
-1. "schedule_event": Create a NEW event/task.
-2. "get_events": List tasks (e.g. "What's for today?").
-3. "delete_event": Remove/delete a task.
-4. "reschedule_event": Move/Reschedule an EXISTING task to a different date/time. (Keywords: "перенеси", "move", "change date", "reschedule").
-5. "mark_done": The user says they completed a task. (Keywords: "сделал", "решил", "готово", "done", "finished").
-6. "journal": Diary entry.
-7. "other": Irrelevant.
-
-Current Date: ${today} (YYYY-MM-DD).
-
-User message: "${text}"
-
-Return purely JSON.
-
-If intent is "mark_done":
-{
-  "intent": "mark_done",
-  "scheduleDetails": {
-    "date": "YYYY-MM-DD", // Date of the task (usually today, unless specified "done yesterday's task")
-    "description": "Keywords to find the task"
-  }
-}
-
-If intent is "reschedule_event":
-{
-  "intent": "reschedule_event",
-  "rescheduleDetails": {
-    "searchDate": "YYYY-MM-DD", // Date mentioned as "from X". If not mentioned, use null (bot will guess).
-    "targetDate": "YYYY-MM-DD", // Date mentioned as "to Y".
-    "targetTime": "HH:mm" | null, // New time if mentioned.
-    "description": "Keywords to find the task"
-  }
-}
-
-If intent is "schedule_event":
-{
-  "intent": "schedule_event",
-  "scheduleDetails": {
-    "date": "YYYY-MM-DD",
-    "startTime": "HH:mm" | null,
-    "endTime": "HH:mm" | null,
-    "description": "Event description"
-  }
-}
-
-// ... other intents (get_events, delete_event like before) ...
-
-For date parsing:
-- "tomorrow" -> next day.
-- "after tomorrow" (послезавтра) -> day after next day.
-
-IMPORTANT: Return ONLY valid JSON.
-`;
+  const prompt = buildClassifierPrompt({ today, text });
 
   try {
     const response = await llm.messages.create({
       model: GLM_MODEL,
-      max_tokens: 1024,
+      max_tokens: APP_CONFIG.llmClassifierMaxTokens,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.1,
+      temperature: APP_CONFIG.llmClassifierTemperature,
     });
 
     // Handle ContentBlock (which can be text or tool_use, though we only expect text here)

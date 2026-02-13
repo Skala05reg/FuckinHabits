@@ -1,3 +1,4 @@
+import { APP_CONFIG } from "@/config/app";
 import { getCalendar, GOOGLE_CALENDAR_ID } from "@/lib/google-calendar";
 import { getBot } from "@/lib/bot";
 import { InlineKeyboard } from "grammy";
@@ -5,28 +6,18 @@ import { calendar_v3 } from "googleapis";
 
 export async function sendDailyDigest(telegramId: number, tzOffsetMinutes: number) {
   const now = new Date();
-  // Adjust to user's time
-  const localTime = new Date(now.getTime() + tzOffsetMinutes * 60000);
+  const localTime = new Date(now.getTime() + tzOffsetMinutes * 60_000);
   
   const y = localTime.getUTCFullYear();
   const m = String(localTime.getUTCMonth() + 1).padStart(2, "0");
   const d = String(localTime.getUTCDate()).padStart(2, "0");
-  const dateStr = `${y}-${m}-${d}`; // YYYY-MM-DD
-  
-  // Construct ISO strings for the user's day
-  // To get the correct query range, we can use the user's midnight.
-  // localTime is currently "now" (e.g. 09:00 local).
-  // We want 00:00:00 to 23:59:59 of this day.
-  
-  // Create a date object representing 00:00 user time
+  const dateStr = `${y}-${m}-${d}`;
+
   const startOfDay = new Date(localTime);
   startOfDay.setUTCHours(0, 0, 0, 0);
-  // Convert back to absolute UTC time for the API query
-  // startOfDay (User View) -> UTC (API View)
-  // We added offset to get to User View. So subtract offset to get back to UTC.
-  const startOfDayUtc = new Date(startOfDay.getTime() - tzOffsetMinutes * 60000);
+  const startOfDayUtc = new Date(startOfDay.getTime() - tzOffsetMinutes * 60_000);
   
-  const endOfDayUtc = new Date(startOfDayUtc.getTime() + 24 * 60 * 60 * 1000 - 1);
+  const endOfDayUtc = new Date(startOfDayUtc.getTime() + 24 * 60 * 60_000 - 1);
   
   const timeMinIso = startOfDayUtc.toISOString();
   const timeMaxIso = endOfDayUtc.toISOString();
@@ -75,20 +66,7 @@ export async function sendDailyDigest(telegramId: number, tzOffsetMinutes: numbe
           if (!isDone) {
               if (e.start?.dateTime) {
                   const dateObj = new Date(e.start.dateTime);
-                  // Format time in user's timezone? 
-                  // Or use the provided timezone in dateTime?
-                  // Usually Google returns ISO with offset.
-                  // We'll trust Intl to format it nicely.
-                  // Note: `tzOffsetMinutes` is from DB. Intl expects IANA string (e.g. 'Europe/Moscow').
-                  // We don't store IANA string, only offset. 
-                  // Fallback: Manually format HH:mm from the ISO string if possible, or just print UTC+Offset.
-                  // Actually, `e.start.dateTime` usually contains the offset.
-                  // Let's just parse the hours/minutes directly from the string if we want to be safe, 
-                  // OR use a fixed timezone if we know it (currently hardcoded to Moscow in original code).
-                  // Let's try to be smart.
-                  // This `dateObj.getHours()` uses the SERVER'S local time (UTC in Vercel).
-                  // We need to shift it to User's time to display correct "09:00".
-                  const userEventTime = new Date(dateObj.getTime() + tzOffsetMinutes * 60000);
+                  const userEventTime = new Date(dateObj.getTime() + tzOffsetMinutes * 60_000);
                   const h = userEventTime.getUTCHours().toString().padStart(2, '0');
                   const m = userEventTime.getUTCMinutes().toString().padStart(2, '0');
                   
@@ -97,7 +75,9 @@ export async function sendDailyDigest(telegramId: number, tzOffsetMinutes: numbe
               btnText = `⬜ ${btnText}`;
           }
           
-          if (btnText.length > 40) btnText = btnText.substring(0, 37) + "...";
+          if (btnText.length > APP_CONFIG.telegramButtonTextLimit) {
+            btnText = `${btnText.substring(0, APP_CONFIG.telegramButtonTextTruncateTo)}...`;
+          }
           keyboard.text(btnText, `toggle_event:${e.id}`).row();
       }
 

@@ -19,6 +19,11 @@ const CompletionRow = z.object({
   habit_id: z.string(),
 });
 
+const QuerySchema = z.object({
+  metric: z.enum(["avg", "efficiency", "social", "habits", "habit"]).optional(),
+  habitId: z.string().min(1).optional(),
+});
+
 export async function GET(request: Request) {
   try {
     const auth = await getTelegramAuthOrThrow(request);
@@ -26,15 +31,11 @@ export async function GET(request: Request) {
     const supabaseAdmin = getSupabaseAdmin();
 
     const url = new URL(request.url);
-    const metric =
-      (url.searchParams.get("metric") as
-        | "avg"
-        | "efficiency"
-        | "social"
-        | "habits"
-        | "habit"
-        | null) ?? "avg";
-    const habitId = url.searchParams.get("habitId");
+    const { metric, habitId } = QuerySchema.parse({
+      metric: url.searchParams.get("metric") ?? undefined,
+      habitId: url.searchParams.get("habitId") ?? undefined,
+    });
+    const selectedMetric = metric ?? "avg";
 
     const user = await ensureUser({
       telegramId: auth.telegramId,
@@ -51,7 +52,7 @@ export async function GET(request: Request) {
     const fromDate = `${year}-01-01`;
     const toDate = `${year}-12-31`;
 
-    if (metric === "habit") {
+    if (selectedMetric === "habit") {
       if (!habitId) throw new Error("Missing habitId");
 
       const { data: hc, error: hcError } = await supabaseAdmin
@@ -70,10 +71,10 @@ export async function GET(request: Request) {
         .sort()
         .map((d) => ({ date: d, value: 5 }));
 
-      return Response.json({ year, fromDate, toDate, metric, habitId, points });
+      return Response.json({ year, fromDate, toDate, metric: selectedMetric, habitId, points });
     }
 
-    if (metric === "habits") {
+    if (selectedMetric === "habits") {
       const { data: habits, error: habitsError } = await supabaseAdmin
         .from("habits")
         .select("id")
@@ -84,7 +85,7 @@ export async function GET(request: Request) {
       const habitIds = (habits ?? []).map((h) => String((h as { id: unknown }).id));
       const total = habitIds.length;
       if (!total) {
-        return Response.json({ year, fromDate, toDate, metric, points: [] });
+        return Response.json({ year, fromDate, toDate, metric: selectedMetric, points: [] });
       }
 
       const { data: hc, error: hcError } = await supabaseAdmin
@@ -111,7 +112,7 @@ export async function GET(request: Request) {
           return { date, value };
         });
 
-      return Response.json({ year, fromDate, toDate, metric, points });
+      return Response.json({ year, fromDate, toDate, metric: selectedMetric, points });
     }
 
     const { data, error } = await supabaseAdmin
@@ -130,14 +131,14 @@ export async function GET(request: Request) {
       const e = r.rating_efficiency;
       const s = r.rating_social;
 
-      if (metric === "efficiency") return { date: r.date, value: e ?? 0 };
-      if (metric === "social") return { date: r.date, value: s ?? 0 };
+      if (selectedMetric === "efficiency") return { date: r.date, value: e ?? 0 };
+      if (selectedMetric === "social") return { date: r.date, value: s ?? 0 };
 
       const value = e !== null && s !== null ? Math.round((e + s) / 2) : (e ?? s ?? 0);
       return { date: r.date, value };
     });
 
-    return Response.json({ year, fromDate, toDate, metric, points });
+    return Response.json({ year, fromDate, toDate, metric: selectedMetric, points });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return Response.json({ error: msg }, { status: 400 });

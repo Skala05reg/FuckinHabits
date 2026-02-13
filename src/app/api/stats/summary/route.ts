@@ -72,6 +72,7 @@ export async function GET(request: Request) {
 
     const from = fromDate ?? `${year}-01-01`;
     const to = toDate ?? logicalToday;
+    const streakAnchorDate = to;
 
     const { data: daily, error: dailyErr } = await supabaseAdmin
       .from("daily_logs")
@@ -150,7 +151,7 @@ export async function GET(request: Request) {
       const best = calcBestStreak(datesAsc);
 
       let cur = 0;
-      let cursor = logicalToday;
+      let cursor = streakAnchorDate;
       while (set.has(cursor)) {
         cur += 1;
         cursor = decIsoDate(cursor);

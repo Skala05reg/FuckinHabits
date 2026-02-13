@@ -1,3 +1,5 @@
+import { buildDeletePrompt } from "@/config/agent-prompts";
+import { APP_CONFIG } from "@/config/app";
 import { llm, GLM_MODEL } from "@/lib/llm";
 
 interface CalendarEvent {
@@ -14,31 +16,14 @@ export async function identifyEventsToDelete(
     .map((e, index) => `${index + 1}. [ID: ${e.id}] "${e.summary}" (Time: ${e.start})`)
     .join("\n");
 
-  const prompt = `
-You are a smart calendar assistant.
-The user wants to delete specific events from their schedule.
-
-User Query: "${userQuery}"
-
-Here are the existing events for that day:
-${eventsList}
-
-Analyze the User Query and match it against the events.
-Return a JSON object containing an array of "ids" for the events that should be deleted.
-If no events match the user's intent, return an empty array.
-
-Example Response:
-{ "ids": ["eventId123", "eventId456"] }
-
-IMPORTANT: Return ONLY valid JSON.
-`;
+  const prompt = buildDeletePrompt({ userQuery, eventsList });
 
   try {
     const response = await llm.messages.create({
       model: GLM_MODEL,
-      max_tokens: 512,
+      max_tokens: APP_CONFIG.llmAgentMaxTokens,
       messages: [{ role: "user", content: prompt }],
-      temperature: 0.0,
+      temperature: APP_CONFIG.llmAgentTemperature,
     });
 
     const block = response.content[0];

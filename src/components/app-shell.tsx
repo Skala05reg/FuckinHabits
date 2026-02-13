@@ -20,6 +20,8 @@ import { cn } from "@/lib/cn";
 import { getTelegramWebApp } from "@/lib/telegram/webapp";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+const SWR_DEDUPING_INTERVAL_MS = 60_000;
+
 function getTzOffsetMinutesClient(): number {
   return -new Date().getTimezoneOffset();
 }
@@ -185,7 +187,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
-      dedupingInterval: 60000,
+      dedupingInterval: SWR_DEDUPING_INTERVAL_MS,
     },
   );
 
@@ -235,7 +237,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
-      dedupingInterval: 60000,
+      dedupingInterval: SWR_DEDUPING_INTERVAL_MS,
     },
   );
 
@@ -276,7 +278,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
-      dedupingInterval: 60000,
+      dedupingInterval: SWR_DEDUPING_INTERVAL_MS,
     },
   );
 
@@ -304,7 +306,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
-      dedupingInterval: 60000,
+      dedupingInterval: SWR_DEDUPING_INTERVAL_MS,
     },
   );
 
@@ -320,7 +322,7 @@ export default function AppShell() {
     },
     {
       revalidateOnFocus: false,
-      dedupingInterval: 60000,
+      dedupingInterval: SWR_DEDUPING_INTERVAL_MS,
     },
   );
 
@@ -348,13 +350,11 @@ export default function AppShell() {
     const title = (goalEdits[id] ?? "").trim();
     if (!title) return;
 
-    await fetch(new URL(`/api/goals/${id}`, window.location.origin).toString(), {
+    await apiFetch(`/api/goals/${id}`, initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
       method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        "x-telegram-init-data": initData,
-      },
-      body: JSON.stringify({ title }),
+      body: { title },
     });
 
     await mutateGoalsList();
@@ -362,24 +362,21 @@ export default function AppShell() {
   }
 
   async function toggleGoalActive(id: string, next: boolean) {
-    await fetch(new URL(`/api/goals/${id}`, window.location.origin).toString(), {
+    await apiFetch(`/api/goals/${id}`, initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
       method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        "x-telegram-init-data": initData,
-      },
-      body: JSON.stringify({ isActive: next }),
+      body: { isActive: next },
     });
     await mutateGoalsList();
     await mutate();
   }
 
   async function deactivateGoal(id: string) {
-    await fetch(new URL(`/api/goals/${id}`, window.location.origin).toString(), {
+    await apiFetch(`/api/goals/${id}`, initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
       method: "DELETE",
-      headers: {
-        "x-telegram-init-data": initData,
-      },
     });
     await mutateGoalsList();
     await mutate();
@@ -389,26 +386,22 @@ export default function AppShell() {
     const title = (habitEdits[id] ?? "").trim();
     if (!title) return;
 
-    await fetch(new URL(`/api/habits/${id}`, window.location.origin).toString(), {
+    await apiFetch(`/api/habits/${id}`, initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
       method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        "x-telegram-init-data": initData,
-      },
-      body: JSON.stringify({ title }),
+      body: { title },
     });
     await mutateHabitsList();
     await mutate();
   }
 
   async function toggleHabitActive(id: string, next: boolean) {
-    await fetch(new URL(`/api/habits/${id}`, window.location.origin).toString(), {
+    await apiFetch(`/api/habits/${id}`, initData, {
+      tzOffsetMinutes,
+      mockTelegramId,
       method: "PATCH",
-      headers: {
-        "content-type": "application/json",
-        "x-telegram-init-data": initData,
-      },
-      body: JSON.stringify({ isActive: next }),
+      body: { isActive: next },
     });
     await mutateHabitsList();
     await mutate();
@@ -651,7 +644,7 @@ export default function AppShell() {
       </div>
 
       {canLoad && (
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <Button
             variant={screen === "home" ? "primary" : "secondary"}
             size="sm"

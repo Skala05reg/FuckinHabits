@@ -1,3 +1,5 @@
+import { APP_CONFIG } from "@/config/app";
+
 export function formatYYYYMMDDFromUTCParts(d: Date): string {
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
@@ -7,7 +9,7 @@ export function formatYYYYMMDDFromUTCParts(d: Date): string {
 
 export function getLogicalDate(nowUtc: Date, tzOffsetMinutes: number): string {
   const localMs = nowUtc.getTime() + tzOffsetMinutes * 60_000;
-  const logicalMs = localMs - 4 * 60 * 60_000;
+  const logicalMs = localMs - APP_CONFIG.logicalDayStartHour * 60 * 60_000;
   const logical = new Date(logicalMs);
   return formatYYYYMMDDFromUTCParts(logical);
 }

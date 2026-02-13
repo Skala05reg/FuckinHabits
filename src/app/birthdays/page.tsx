@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import useSWR, { mutate } from "swr";
 import { ArrowLeft, Plus, Trash2, Edit2, Loader2, Calendar } from "lucide-react";
 
@@ -28,24 +28,26 @@ declare global {
 
 function useInitData() {
     const [initData, setInitData] = useState("");
+    const handleBack = useCallback(() => {
+        window.history.back();
+    }, []);
+
     useEffect(() => {
         if (typeof window !== "undefined" && window.Telegram?.WebApp) {
             setInitData(window.Telegram.WebApp.initData);
 
             if (window.Telegram.WebApp.BackButton) {
                 window.Telegram.WebApp.BackButton.show();
-                window.Telegram.WebApp.BackButton.onClick(() => {
-                    window.history.back();
-                });
+                window.Telegram.WebApp.BackButton.onClick(handleBack);
             }
             return () => {
                 if (window.Telegram?.WebApp?.BackButton) {
                     window.Telegram.WebApp.BackButton.hide();
-                    window.Telegram.WebApp.BackButton.offClick(() => { });
+                    window.Telegram.WebApp.BackButton.offClick(handleBack);
                 }
-            }
+            };
         }
-    }, []);
+    }, [handleBack]);
     return initData;
 }
 
@@ -76,7 +78,7 @@ export default function BirthdaysPage() {
         ([url, token]) => apiFetch<{ birthdays: Birthday[] }>(url as string, token as string)
     );
 
-    const birthdays = data?.birthdays || [];
+    const birthdays = useMemo(() => data?.birthdays ?? [], [data?.birthdays]);
 
     // Sort by upcoming
     const sortedBirthdays = useMemo(() => {

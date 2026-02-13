@@ -1,5 +1,7 @@
 import { Bot, InlineKeyboard } from "grammy";
 
+import { APP_CONFIG } from "@/config/app";
+import { getDateInTimeZone, formatOffsetMinutes, shiftIsoDate } from "@/lib/date-time";
 import { ensureUser } from "@/lib/db/users";
 import { getLogicalDate } from "@/lib/logical-date";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -15,6 +17,19 @@ function requireEnv(name: string): string {
 }
 
 type GlobalWithBot = typeof globalThis & { __bot?: Bot };
+const DEFAULT_TIMEZONE = APP_CONFIG.defaultCalendarTimeZone;
+const DEFAULT_OFFSET = formatOffsetMinutes(APP_CONFIG.defaultCalendarOffsetMinutes);
+
+function toDayRange(date: string): { timeMin: string; timeMax: string } {
+  return {
+    timeMin: `${date}T00:00:00${DEFAULT_OFFSET}`,
+    timeMax: `${date}T23:59:59${DEFAULT_OFFSET}`,
+  };
+}
+
+function toDateTimeWithDefaultOffset(date: string, time: string): string {
+  return `${date}T${time}:00${DEFAULT_OFFSET}`;
+}
 
 export function getBot(): Bot {
   const g = globalThis as GlobalWithBot;
@@ -137,9 +152,7 @@ export function getBot(): Bot {
         
         if (!startTime) {
           // All Day
-          const d = new Date(date);
-          d.setDate(d.getDate() + 1);
-          const nextDay = d.toISOString().split('T')[0];
+          const nextDay = shiftIsoDate(date, 1);
 
           await getCalendar().events.insert({
             calendarId: GOOGLE_CALENDAR_ID,
@@ -162,15 +175,15 @@ export function getBot(): Bot {
               endT = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
             }
 
-            const startDateTime = `${date}T${startT}:00+03:00`;
-            const endDateTime = `${date}T${endT}:00+03:00`;
+            const startDateTime = toDateTimeWithDefaultOffset(date, startT);
+            const endDateTime = toDateTimeWithDefaultOffset(date, endT);
 
             await getCalendar().events.insert({
             calendarId: GOOGLE_CALENDAR_ID,
             requestBody: {
                 summary: description,
-                start: { dateTime: startDateTime, timeZone: "Europe/Moscow" },
-                end: { dateTime: endDateTime, timeZone: "Europe/Moscow" },
+                start: { dateTime: startDateTime, timeZone: DEFAULT_TIMEZONE },
+                end: { dateTime: endDateTime, timeZone: DEFAULT_TIMEZONE },
             },
             });
 
@@ -182,8 +195,7 @@ export function getBot(): Bot {
       // --- 2. Get Events ---
       if (classification.intent === "get_events" && classification.scheduleDetails?.date) {
         const date = classification.scheduleDetails.date;
-        const timeMin = `${date}T00:00:00+03:00`;
-        const timeMax = `${date}T23:59:59+03:00`;
+        const { timeMin, timeMax } = toDayRange(date);
 
         const res = await getCalendar().events.list({
           calendarId: GOOGLE_CALENDAR_ID,
@@ -215,7 +227,7 @@ export function getBot(): Bot {
             for (const e of timed) {
                 const dateObj = new Date(e.start!.dateTime!);
                 const start = new Intl.DateTimeFormat('ru-RU', { 
-                    timeZone: 'Europe/Moscow', 
+                    timeZone: DEFAULT_TIMEZONE,
                     hour: '2-digit', 
                     minute: '2-digit' 
                 }).format(dateObj);
@@ -241,8 +253,7 @@ export function getBot(): Bot {
             return;
         }
 
-        const timeMin = `${date}T00:00:00+03:00`;
-        const timeMax = `${date}T23:59:59+03:00`;
+        const { timeMin, timeMax } = toDayRange(date);
 
         const res = await getCalendar().events.list({
           calendarId: GOOGLE_CALENDAR_ID,
@@ -291,9 +302,8 @@ export function getBot(): Bot {
       if (classification.intent === "reschedule_event" && classification.rescheduleDetails) {
         const { searchDate, targetDate, targetTime, description } = classification.rescheduleDetails;
         
-        const dateToSearch = searchDate || new Date().toISOString().split('T')[0];
-        const timeMin = `${dateToSearch}T00:00:00+03:00`;
-        const timeMax = `${dateToSearch}T23:59:59+03:00`;
+        const dateToSearch = searchDate || getDateInTimeZone(new Date(), DEFAULT_TIMEZONE);
+        const { timeMin, timeMax } = toDayRange(dateToSearch);
 
         const res = await getCalendar().events.list({
             calendarId: GOOGLE_CALENDAR_ID,
@@ -330,19 +340,17 @@ export function getBot(): Bot {
             // Was All-day
             if (targetTime) {
                 // Become Timed
-                const startDateTime = `${targetDate}T${targetTime}:00+03:00`;
+                const startDateTime = toDateTimeWithDefaultOffset(targetDate, targetTime);
                 const [h, m] = targetTime.split(':').map(Number);
                 const endH = (h + 1) % 24;
                 const endT = `${endH.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-                const endDateTime = `${targetDate}T${endT}:00+03:00`;
+                const endDateTime = toDateTimeWithDefaultOffset(targetDate, endT);
                 
-                requestBody.start = { dateTime: startDateTime, timeZone: "Europe/Moscow" };
-                requestBody.end = { dateTime: endDateTime, timeZone: "Europe/Moscow" };
+                requestBody.start = { dateTime: startDateTime, timeZone: DEFAULT_TIMEZONE };
+                requestBody.end = { dateTime: endDateTime, timeZone: DEFAULT_TIMEZONE };
             } else {
                 // Stay All-day
-                const d = new Date(targetDate);
-                d.setDate(d.getDate() + 1);
-                const nextDay = d.toISOString().split('T')[0];
+                const nextDay = shiftIsoDate(targetDate, 1);
                 
                 requestBody.start = { date: targetDate };
                 requestBody.end = { date: nextDay };
@@ -355,7 +363,7 @@ export function getBot(): Bot {
 
             let newStartDateTime = "";
             if (targetTime) {
-                newStartDateTime = `${targetDate}T${targetTime}:00+03:00`;
+                newStartDateTime = toDateTimeWithDefaultOffset(targetDate, targetTime);
             } else {
                 const timePart = originalEvent.start.dateTime.split('T')[1];
                 newStartDateTime = `${targetDate}T${timePart}`;
@@ -364,8 +372,8 @@ export function getBot(): Bot {
             const newStartObj = new Date(newStartDateTime);
             const newEndObj = new Date(newStartObj.getTime() + durationMs);
             
-            requestBody.start = { dateTime: newStartDateTime, timeZone: "Europe/Moscow" };
-            requestBody.end = { dateTime: newEndObj.toISOString(), timeZone: "Europe/Moscow" };
+            requestBody.start = { dateTime: newStartDateTime, timeZone: DEFAULT_TIMEZONE };
+            requestBody.end = { dateTime: newEndObj.toISOString(), timeZone: DEFAULT_TIMEZONE };
         }
 
         await getCalendar().events.patch({
@@ -383,10 +391,9 @@ export function getBot(): Bot {
         const { date, description } = classification.scheduleDetails;
         
         // Default to today if not specified (usually marking done today)
-        const dateToSearch = date || new Date().toISOString().split('T')[0];
+        const dateToSearch = date || getDateInTimeZone(new Date(), DEFAULT_TIMEZONE);
         
-        const timeMin = `${dateToSearch}T00:00:00+03:00`;
-        const timeMax = `${dateToSearch}T23:59:59+03:00`;
+        const { timeMin, timeMax } = toDayRange(dateToSearch);
 
         const res = await getCalendar().events.list({
           calendarId: GOOGLE_CALENDAR_ID,

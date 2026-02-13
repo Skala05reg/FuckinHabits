@@ -6,20 +6,22 @@ export async function sendJournalReminder(userId: string, telegramId: number, da
   const supabaseAdmin = getSupabaseAdmin();
 
   // Check if daily_log exists for this date
-  const { data: dayLog } = await supabaseAdmin
+  const { data: dayLog, error: dayLogError } = await supabaseAdmin
     .from("daily_logs")
     .select("id")
     .eq("user_id", userId)
     .eq("date", dateStr)
     .maybeSingle();
+  if (dayLogError) throw dayLogError;
 
   // Check if any habits were completed
-  const { data: completions } = await supabaseAdmin
+  const { data: completions, error: completionsError } = await supabaseAdmin
     .from("habit_completions")
     .select("id")
     .eq("user_id", userId)
     .eq("date", dateStr)
     .limit(1);
+  if (completionsError) throw completionsError;
 
   const hasData = dayLog || (completions && completions.length > 0);
 

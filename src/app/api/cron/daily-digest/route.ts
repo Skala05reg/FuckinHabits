@@ -1,16 +1,17 @@
+import { APP_CONFIG } from "@/config/app";
 import { NextResponse } from "next/server";
 import { getCalendar, GOOGLE_CALENDAR_ID } from "@/lib/google-calendar";
 import { getBot } from "@/lib/bot";
+import { requireCronAuth } from "@/lib/cron-auth";
+import { formatOffsetMinutes, getDateInTimeZone } from "@/lib/date-time";
 import { calendar_v3 } from "googleapis";
 import { InlineKeyboard } from "grammy";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  const authHeader = request.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new NextResponse("Unauthorized", { status: 401 });
-  }
+async function runDailyDigest(request: Request) {
+  const unauthorized = requireCronAuth(request);
+  if (unauthorized) return unauthorized;
 
   const userId = process.env.TELEGRAM_USER_ID;
   if (!userId) {
@@ -18,15 +19,12 @@ export async function GET(request: Request) {
   }
 
   const now = new Date();
-  const moscowDateStr = new Intl.DateTimeFormat('en-CA', { 
-      timeZone: 'Europe/Moscow',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-  }).format(now);
+  const timeZone = APP_CONFIG.defaultCalendarTimeZone;
+  const moscowDateStr = getDateInTimeZone(now, timeZone);
+  const offsetStr = formatOffsetMinutes(APP_CONFIG.defaultCalendarOffsetMinutes);
   
-  const timeMin = `${moscowDateStr}T00:00:00+03:00`;
-  const timeMax = `${moscowDateStr}T23:59:59+03:00`;
+  const timeMin = `${moscowDateStr}T00:00:00${offsetStr}`;
+  const timeMax = `${moscowDateStr}T23:59:59${offsetStr}`;
 
   try {
       const res = await getCalendar().events.list({
@@ -38,7 +36,7 @@ export async function GET(request: Request) {
       });
 
       const events = res.data.items || [];
-      if (events.length === 0) {
+          if (events.length === 0) {
            const bot = getBot();
            await bot.init();
            await bot.api.sendMessage(userId, `📅 На сегодня (${moscowDateStr}) задач нет! Отдыхай.`);
@@ -77,7 +75,7 @@ export async function GET(request: Request) {
               if (e.start?.dateTime) {
                   const dateObj = new Date(e.start.dateTime);
                   const time = new Intl.DateTimeFormat("ru-RU", { 
-                      timeZone: "Europe/Moscow", 
+                      timeZone,
                       hour: "2-digit", 
                       minute: "2-digit" 
                   }).format(dateObj);
@@ -89,7 +87,9 @@ export async function GET(request: Request) {
           }
 
           // Limit button text length (Telegram limit is 64 bytes for data, text can be longer but looks bad)
-          if (btnText.length > 40) btnText = btnText.substring(0, 37) + "...";
+          if (btnText.length > APP_CONFIG.telegramButtonTextLimit) {
+            btnText = `${btnText.substring(0, APP_CONFIG.telegramButtonTextTruncateTo)}...`;
+          }
 
           keyboard.text(btnText, `toggle_event:${e.id}`).row();
       }
@@ -107,4 +107,12 @@ export async function GET(request: Request) {
       console.error(e);
       return new NextResponse("Error fetching calendar", { status: 500 });
   }
+}
+
+export async function GET(request: Request) {
+  return runDailyDigest(request);
+}
+
+export async function POST(request: Request) {
+  return runDailyDigest(request);
 }

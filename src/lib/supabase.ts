@@ -19,9 +19,7 @@ export function getSupabaseAdmin(): SupabaseClient {
 
   // Basic URL validation to catch obvious mistakes
   if (!url.startsWith("http")) {
-    console.error(`Supabase error: SUPABASE_URL does not start with http/https: ${url.substring(0, 5)}...`);
-  } else {
-    console.log(`Supabase client initializing with URL: ${url.substring(0, 20)}...`);
+    throw new Error("Invalid env: SUPABASE_URL must start with http/https");
   }
 
   _supabaseAdmin = createClient(url, key, {

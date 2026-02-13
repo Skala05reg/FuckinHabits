@@ -84,7 +84,7 @@ export async function apiFetch<T>(
   opts?: {
     tzOffsetMinutes?: number;
     mockTelegramId?: string | null;
-    method?: "GET" | "POST" | "PUT" | "DELETE";
+    method?: "GET" | "POST" | "PUT" | "PATCH" | "DELETE";
     body?: unknown;
   },
 ): Promise<T> {
