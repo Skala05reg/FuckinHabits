@@ -186,3 +186,19 @@
   - `npm run lint` => passed
   - `npm run build` => passed
 - Confirmed refactor set is ready for commit/push without additional business-logic changes.
+
+## 2026-02-16 17:09 MSK
+
+### Release and verification
+- Committed refactor package to `main`:
+  - commit: `bd03f32`
+  - message: `refactor(bot): stabilize task-list flow and digest dedupe`
+- Pushed to GitHub:
+  - `origin/main` updated from `732155d` to `bd03f32`.
+- Triggered production deployment in Vercel and verified latest deployment state:
+  - deployment: `https://fuckin-habits-glza78i6p-olegstroganov04-gmailcoms-projects.vercel.app`
+  - state: `READY`
+  - commit sha on deployment: `bd03f32486c6b0ae6973207ac25a5ddcd077d473`
+- Production checks:
+  - `GET https://fuckin-habits.vercel.app` => `200`
+  - production logs for recent window => no `500` entries.

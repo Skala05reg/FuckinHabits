@@ -290,3 +290,25 @@
 
 3. Readiness
 - Refactor package from this cycle is stable and ready for commit/push.
+
+## 2026-02-16 17:09:35 MSK (+0300)
+
+### Commit / push / deploy completion
+1. Git
+- Committed all refactor + docs changes:
+  - commit: `bd03f32`
+  - message: `refactor(bot): stabilize task-list flow and digest dedupe`
+- Pushed to GitHub:
+  - `main` advanced `732155d -> bd03f32`.
+
+2. Vercel
+- Production deploy triggered via CLI.
+- Deployment verified as `READY`:
+  - `https://fuckin-habits-glza78i6p-olegstroganov04-gmailcoms-projects.vercel.app`
+- Deployment metadata confirms commit sha:
+  - `bd03f32486c6b0ae6973207ac25a5ddcd077d473`
+
+3. Runtime checks
+- `GET https://fuckin-habits.vercel.app` => `200`.
+- Production logs (recent window) checked:
+  - no `500` status entries found.
