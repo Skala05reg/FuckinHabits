@@ -2,8 +2,10 @@ import { Bot, InlineKeyboard } from "grammy";
 import { calendar_v3 } from "googleapis";
 
 import { APP_CONFIG } from "@/config/app";
+import { BOT_CONFIG, isLikelyTaskListQuery } from "@/config/bot";
 import { getDateInTimeZone, formatOffsetMinutes, shiftIsoDate } from "@/lib/date-time";
 import { ensureUser } from "@/lib/db/users";
+import { sendTaskListMessage } from "@/lib/features/task-lists";
 import { getLogicalDate } from "@/lib/logical-date";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { classifyMessage } from "@/lib/agent/classifier";
@@ -47,7 +49,8 @@ export function getBot(): Bot {
 
         const appUrl = process.env.WEBAPP_URL;
         const keyboard = new InlineKeyboard();
-        if (appUrl) keyboard.webApp("Открыть трекер", appUrl);
+        if (appUrl) keyboard.webApp(BOT_CONFIG.labels.openTracker, appUrl).row();
+        keyboard.text(BOT_CONFIG.labels.showTodayTasks, BOT_CONFIG.callbacks.showTasksToday);
 
         await ctx.reply(
         "Открой Mini App и отмечай привычки/оценки дня. Логический день длится до 04:00.",
@@ -59,10 +62,64 @@ export function getBot(): Bot {
     }
   });
 
+  async function sendTodayTasksForUser(telegramId: number, firstName?: string): Promise<void> {
+    const user = await ensureUser({ telegramId, firstName });
+    const supabaseAdmin = getSupabaseAdmin();
+    const botRef = getBot();
+    await botRef.init();
+
+    await sendTaskListMessage({
+      bot: botRef,
+      supabase: supabaseAdmin,
+      userId: user.id,
+      telegramId: user.telegram_id,
+      tzOffsetMinutes: user.tz_offset_minutes ?? 0,
+    });
+  }
+
+  bot.command("tasks", async (ctx) => {
+    const telegramId = ctx.from?.id;
+    if (!telegramId) return;
+    try {
+      await sendTodayTasksForUser(telegramId, ctx.from?.first_name);
+    } catch (error) {
+      console.error("Command /tasks error:", error);
+      await ctx.reply("❌ Не удалось загрузить задачи.");
+    }
+  });
+
+  bot.command("today", async (ctx) => {
+    const telegramId = ctx.from?.id;
+    if (!telegramId) return;
+    try {
+      await sendTodayTasksForUser(telegramId, ctx.from?.first_name);
+    } catch (error) {
+      console.error("Command /today error:", error);
+      await ctx.reply("❌ Не удалось загрузить задачи.");
+    }
+  });
+
   bot.on("callback_query:data", async (ctx) => {
     const data = ctx.callbackQuery.data;
-    if (data.startsWith("toggle_event:")) {
-      const eventId = data.split(":")[1];
+    if (data === BOT_CONFIG.callbacks.showTasksToday) {
+      const telegramId = ctx.from?.id;
+      if (!telegramId) {
+        await ctx.answerCallbackQuery("Не удалось определить пользователя");
+        return;
+      }
+
+      try {
+        await sendTodayTasksForUser(telegramId, ctx.from?.first_name);
+        await ctx.answerCallbackQuery("Отправил список задач на сегодня");
+      } catch (error) {
+        console.error("Show-tasks callback error:", error);
+        await ctx.answerCallbackQuery("Ошибка при загрузке задач");
+      }
+      return;
+    }
+
+    if (data.startsWith(BOT_CONFIG.callbacks.toggleEventPrefix)) {
+      const eventId = data.slice(BOT_CONFIG.callbacks.toggleEventPrefix.length);
       if (!eventId) return;
 
       try {
@@ -144,6 +201,19 @@ export function getBot(): Bot {
 
     try {
       const user = await ensureUser({ telegramId, firstName: ctx.from?.first_name });
+      const supabaseAdmin = getSupabaseAdmin();
+
+      if (isLikelyTaskListQuery(text)) {
+        await sendTaskListMessage({
+          bot,
+          supabase: supabaseAdmin,
+          userId: user.id,
+          telegramId: user.telegram_id,
+          tzOffsetMinutes: user.tz_offset_minutes ?? 0,
+        });
+        return;
+      }
+
       const classification = await classifyMessage(text);
 
       // --- 1. Schedule Event ---
@@ -193,53 +263,16 @@ export function getBot(): Bot {
       } 
 
       // --- 2. Get Events ---
-      if (classification.intent === "get_events" && classification.scheduleDetails?.date) {
-        const date = classification.scheduleDetails.date;
-        const { timeMin, timeMax } = toDayRange(date);
-
-        const res = await getCalendar().events.list({
-          calendarId: GOOGLE_CALENDAR_ID,
-          timeMin,
-          timeMax,
-          singleEvents: true,
-          orderBy: "startTime",
+      if (classification.intent === "get_events") {
+        const date = classification.scheduleDetails?.date ?? getDateInTimeZone(new Date(), DEFAULT_TIMEZONE);
+        await sendTaskListMessage({
+          bot,
+          supabase: supabaseAdmin,
+          userId: user.id,
+          telegramId: user.telegram_id,
+          tzOffsetMinutes: user.tz_offset_minutes ?? 0,
+          date,
         });
-
-        const events = res.data.items || [];
-        if (events.length === 0) {
-          await ctx.reply(`📅 На ${date} задач нет.`);
-          return;
-        }
-
-        const timed: calendar_v3.Schema$Event[] = [];
-        const allDay: calendar_v3.Schema$Event[] = [];
-
-        for (const e of events) {
-            if (e.start?.dateTime) timed.push(e);
-            else if (e.start?.date) allDay.push(e);
-        }
-
-        let msg = `📅 *Задачи на ${date}*\n\n`;
-
-        if (timed.length > 0) {
-            for (const e of timed) {
-                const dateObj = new Date(e.start!.dateTime!);
-                const start = new Intl.DateTimeFormat('ru-RU', { 
-                    timeZone: DEFAULT_TIMEZONE,
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                }).format(dateObj);
-                msg += `▫️ ${start} — ${e.summary}\n`;
-            }
-            if (allDay.length > 0) msg += "\n";
-        }
-
-        if (allDay.length > 0) {
-            for (const e of allDay) {
-                msg += `▫️ ${e.summary}\n`;
-            }
-        }
-        await ctx.reply(msg, { parse_mode: "Markdown" });
         return;
       }
       
@@ -446,8 +479,6 @@ export function getBot(): Bot {
       // Default to Journal
       const tzOffsetMinutes = user.tz_offset_minutes ?? 0;
       const logicalDate = getLogicalDate(new Date(), tzOffsetMinutes);
-      const supabaseAdmin = getSupabaseAdmin();
-
       const { error } = await supabaseAdmin
         .from("daily_logs")
         .upsert(

@@ -56,7 +56,11 @@ async function runHourly(request: Request) {
 
         // Hourly cron cannot guarantee minute precision; we honor user hour reliably.
         if (userHour === digestHour) {
-             const sent = await sendDailyDigest(user.telegram_id, tzOffset);
+             const sent = await sendDailyDigest({
+               userId: user.id,
+               telegramId: user.telegram_id,
+               tzOffsetMinutes: tzOffset,
+             });
              if (minuteMatch) {
                actions.push(sent ? "digest_sent" : "digest_failed");
              } else {

@@ -208,3 +208,85 @@
 - OpenTelemetry signals (observability completeness): https://opentelemetry.io/docs/concepts/signals/
 - NIST SP 800-63B (auth verifier guidance): https://pages.nist.gov/800-63-4/sp800-63b.html
 
+## 2026-02-16 17:02:24 MSK (+0300)
+
+### What was broken
+- User messages requesting task list (e.g. “покажи задачи на сегодня”) often ended up as journal notes.
+- Bot did not have a dedicated “show today tasks” command/button flow independent from LLM quality.
+- Task-list messages could accumulate and duplicate.
+
+### Refactor done (without changing core business goals)
+1. Fixed task-list intent delivery reliability:
+- Added deterministic quick intent matcher for task-list requests:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/config/bot.ts`
+  - wired in `/Users/vodnik/Desktop/FuckinHabits/src/lib/bot.ts`
+- Updated `get_events` behavior to fallback to “today” date if classifier omits date.
+
+2. Added direct bot controls:
+- New commands:
+  - `/tasks`
+  - `/today`
+- New inline button in `/start` message:
+  - “📋 Показать задачи на сегодня”
+
+3. Implemented unified todo-list sender with dedupe:
+- New shared sender module:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/features/task-lists.ts`
+- Daily digest now uses same sender path:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/features/digest.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/hourly/route.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/daily-digest/route.ts`
+- Before sending new task-list message, all previous tracked task-list messages are deleted.
+
+4. Added persistence for duplicate cleanup:
+- DB migration/table:
+  - `/Users/vodnik/Desktop/FuckinHabits/supabase/migrations/20260216000000_add_bot_messages.sql`
+  - `/Users/vodnik/Desktop/FuckinHabits/supabase/schema.sql`
+- DB helper methods:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/db/bot-messages.ts`
+- Safety: if migration not applied yet, bot now fails open (no 500 due missing table), and still sends task list.
+
+5. Config/doc alignment:
+- Added/used config keys and constants:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/config/app.ts`
+  - `/Users/vodnik/Desktop/FuckinHabits/src/config/bot.ts`
+- Updated env/docs:
+  - `/Users/vodnik/Desktop/FuckinHabits/.env.example`
+  - `/Users/vodnik/Desktop/FuckinHabits/README.md`
+
+### Tests and verification
+- `npm run lint` passed.
+- `npm run build` passed.
+
+### Deploy and logs
+- Production deploy successful:
+  - `https://fuckin-habits.vercel.app`
+  - deployment URL: `https://fuckin-habits-p24a5p6wx-olegstroganov04-gmailcoms-projects.vercel.app`
+- Runtime checks:
+  - `GET /` => `200`
+  - `GET /api/cron/hourly` without auth => `401` (expected)
+- Logs check in current window:
+  - no `500` runtime logs found.
+
+### Note on Telegram native checklist type
+- Official Telegram Bot API `sendChecklist` currently works when bot acts on behalf of a connected Business account.
+- Implemented robust cross-bot todo-list UX via interactive inline task list (works in regular bot mode) with auto-complete handling and dedupe.
+
+### External references consulted for this pass
+- Telegram Bot API changelog (checklist methods context): https://core.telegram.org/bots/api-changelog
+- Telegram Bot API sendChecklist docs: https://core.telegram.org/bots/api#sendchecklist
+- Google Calendar API events.list reference: https://developers.google.com/workspace/calendar/api/v3/reference/events/list
+
+## 2026-02-16 17:04:38 MSK (+0300)
+
+### Final pass (this run)
+1. `.gitignore` decision
+- Checked newly generated ignore rules after Vercel linking.
+- Kept `.env*.local` in `.gitignore` as valid hardening (prevents committing local env secrets beyond only `.env.local`).
+
+2. Validation rerun
+- `npm run lint` passed.
+- `npm run build` passed.
+
+3. Readiness
+- Refactor package from this cycle is stable and ready for commit/push.

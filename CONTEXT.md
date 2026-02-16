@@ -135,3 +135,54 @@
 - `npm run lint`: passed.
 - `npm run build`: passed.
 - Vercel deploy/logs remain blocked by invalid/missing credentials in current environment.
+
+## 2026-02-16 17:02 MSK
+
+### Bot task-list delivery fix
+- Fixed core issue where requests like “покажи задачи на сегодня” were often falling through to journal.
+- Added fast-path keyword detection for task-list queries in `/Users/vodnik/Desktop/FuckinHabits/src/config/bot.ts` and wired it in `/Users/vodnik/Desktop/FuckinHabits/src/lib/bot.ts` before LLM classification.
+- Changed `get_events` handling to default date = today when classifier does not provide `scheduleDetails.date`.
+
+### New bot UX for tasks
+- Added commands `/tasks` and `/today` to immediately show today’s task list in Telegram.
+- Added explicit inline button “Показать задачи на сегодня” in `/start` message.
+- Unified callback constants and labels into config (`/Users/vodnik/Desktop/FuckinHabits/src/config/bot.ts`).
+
+### Morning 09:00 task list and deduplication
+- Reworked daily digest to use a shared task-list sender:
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/features/task-lists.ts` (new)
+  - `/Users/vodnik/Desktop/FuckinHabits/src/lib/features/digest.ts` (wrapper)
+- Hourly cron (`/Users/vodnik/Desktop/FuckinHabits/src/app/api/cron/hourly/route.ts`) now sends the same list format at digest time.
+- Added anti-duplicate behavior: before sending a new list, all previously tracked task-list messages are deleted.
+
+### Persistence for duplicate-control
+- Added DB table for tracked bot list messages:
+  - migration: `/Users/vodnik/Desktop/FuckinHabits/supabase/migrations/20260216000000_add_bot_messages.sql`
+  - schema sync: `/Users/vodnik/Desktop/FuckinHabits/supabase/schema.sql`
+  - helpers: `/Users/vodnik/Desktop/FuckinHabits/src/lib/db/bot-messages.ts`
+- Added fail-open compatibility when migration is not yet applied (missing `bot_messages` table no longer causes 500).
+
+### Config and docs hygiene
+- Added config key `MAX_TRACKED_TASK_LIST_MESSAGES`.
+- Added config key `DEFAULT_EVENT_DURATION_MINUTES` usage in bot timed event creation.
+- Updated env/docs:
+  - `/Users/vodnik/Desktop/FuckinHabits/.env.example`
+  - `/Users/vodnik/Desktop/FuckinHabits/README.md`
+
+### Deployment status
+- Deployed production build successfully:
+  - `https://fuckin-habits.vercel.app`
+  - deployment: `https://fuckin-habits-p24a5p6wx-olegstroganov04-gmailcoms-projects.vercel.app`
+- Post-deploy checks:
+  - `GET /` => `200`
+  - `GET /api/cron/hourly` without auth => `401` (expected)
+- Recent production logs: no runtime `500` entries in checked window.
+
+## 2026-02-16 17:04 MSK
+
+### Finalization updates
+- Reviewed new `.gitignore` entry `.env*.local` created after Vercel link setup and kept it as correct (covers all local env variants, prevents accidental secret leaks).
+- Re-ran validation on current tree:
+  - `npm run lint` => passed
+  - `npm run build` => passed
+- Confirmed refactor set is ready for commit/push without additional business-logic changes.
