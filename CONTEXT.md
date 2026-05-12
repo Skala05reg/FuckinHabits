@@ -212,8 +212,8 @@
   - `/start` now renders multiple Mini App buttons from env-backed links.
 - Added PMW admin Mini App support:
   - `PMW_ADMIN_WEBAPP_URL=https://pussy-money-weed.vercel.app/telegram-admin`;
-  - optional `PMW_ADMIN_TELEGRAM_IDS` controls whether the PMW admin button is shown in `/start`;
-  - PMW still performs its own Telegram `initData` HMAC and admin allowlist checks.
+  - the PMW admin button is rendered in `/start` whenever `PMW_ADMIN_WEBAPP_URL` is configured;
+  - PMW itself performs the Telegram `initData` HMAC and admin allowlist checks.
 - Added shared Mini App link helper:
   - `src/lib/telegram/mini-apps.ts`;
   - `/start` combines Mini App buttons with the existing `show_tasks_today` callback button.
@@ -238,3 +238,14 @@
 - Smoke checks:
   - `POST https://fuckin-habits.vercel.app/api/webhook` without Telegram secret => `401` expected;
   - `GET https://fuckin-habits.vercel.app/?smoke=shared-miniapp` => `200`.
+
+## 2026-05-12 10:35 MSK
+
+### PMW button visibility fix
+- Root cause of the missing PMW `/start` button was not Telegram-side:
+  - `src/lib/telegram/mini-apps.ts` filtered PMW button visibility by `PMW_ADMIN_TELEGRAM_IDS` / `TELEGRAM_ADMIN_IDS`;
+  - the shared bot was working, but the current Telegram user ID was not passing that router-level filter.
+- Simplified the shared bot router:
+  - `/start` now always shows the PMW Mini App button when `PMW_ADMIN_WEBAPP_URL` is set;
+  - access control remains enforced only inside PMW through Telegram `initData` verification and `TELEGRAM_ADMIN_IDS`.
+- Removed the now-unused `PMW_ADMIN_TELEGRAM_IDS` example from `README.md` and `.env.example`.

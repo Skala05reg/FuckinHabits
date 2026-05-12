@@ -51,7 +51,7 @@ export function getBot(): Bot {
     try {
         await ensureUser({ telegramId, firstName: ctx.from?.first_name });
 
-        const miniAppLinks = getStartMiniAppLinks(telegramId);
+        const miniAppLinks = getStartMiniAppLinks();
         const keyboard = buildMiniAppKeyboard(miniAppLinks);
         if (miniAppLinks.length) keyboard.row();
         keyboard.text(BOT_CONFIG.labels.showTodayTasks, BOT_CONFIG.callbacks.showTasksToday);
