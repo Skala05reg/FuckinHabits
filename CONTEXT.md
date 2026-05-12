@@ -202,3 +202,39 @@
 - Production checks:
   - `GET https://fuckin-habits.vercel.app` => `200`
   - production logs for recent window => no `500` entries.
+
+## 2026-05-12 09:40 MSK
+
+### Shared Telegram Mini App router
+- Kept `FuckinHabits` as the primary Telegram bot router for the shared bot:
+  - the single Telegram webhook points to `https://fuckin-habits.vercel.app/api/webhook`;
+  - the standard Telegram menu button opens the primary Mini App at `https://fuckin-habits.vercel.app`;
+  - `/start` now renders multiple Mini App buttons from env-backed links.
+- Added PMW admin Mini App support:
+  - `PMW_ADMIN_WEBAPP_URL=https://pussy-money-weed.vercel.app/telegram-admin`;
+  - optional `PMW_ADMIN_TELEGRAM_IDS` controls whether the PMW admin button is shown in `/start`;
+  - PMW still performs its own Telegram `initData` HMAC and admin allowlist checks.
+- Added shared Mini App link helper:
+  - `src/lib/telegram/mini-apps.ts`;
+  - `/start` combines Mini App buttons with the existing `show_tasks_today` callback button.
+- Preserved the newer webhook hardening from `origin/main`:
+  - `src/app/api/webhook/route.ts` uses `validateTelegramWebhookSecret`;
+  - production `TELEGRAM_WEBHOOK_SECRET` was rotated and the Telegram webhook was updated with the same secret token.
+
+### Verification
+- `npm run build` passed locally after rebase conflict resolution.
+- Commit pushed to GitHub:
+  - commit: `efd1869`;
+  - message: `Add shared mini app bot menu`.
+- Vercel production deployment:
+  - deployment: `dpl_3Xr6HuuyWipUcAUi25njm5KDZPjH`;
+  - URL: `https://fuckin-habits-nup5cqtqy-olegstroganov04-gmailcoms-projects.vercel.app`;
+  - state: `READY`;
+  - production alias: `https://fuckin-habits.vercel.app`.
+- Telegram Bot API configuration:
+  - `setWebhook` now points to `https://fuckin-habits.vercel.app/api/webhook`;
+  - `getWebhookInfo` reports `pending_update_count=0`, allowed updates `message, callback_query`, and no last error;
+  - `setChatMenuButton` points the default menu button to `https://fuckin-habits.vercel.app/`.
+- Smoke checks:
+  - `POST https://fuckin-habits.vercel.app/api/webhook` without Telegram secret => `401` expected;
+  - `GET https://fuckin-habits.vercel.app/?smoke=shared-miniapp` => `200`.
