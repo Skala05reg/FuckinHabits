@@ -65,6 +65,11 @@ npm install
 # Telegram
 TELEGRAM_BOT_TOKEN=ваш_токен
 WEBAPP_URL=https://ваш-домен.vercel.app
+WEBAPP_LABEL=Открыть трекер
+PMW_ADMIN_WEBAPP_URL=https://pussy-money-weed.vercel.app/telegram-admin
+PMW_ADMIN_WEBAPP_LABEL=Панель PMW
+PMW_ADMIN_TELEGRAM_IDS=telegram_id_админов_через_запятую
+TELEGRAM_WEBHOOK_SECRET=секрет_для_telegram_webhook
 TELEGRAM_USER_ID=ваш_id_для_тестов
 TELEGRAM_WEBHOOK_SECRET=длинный_секрет_для_webhook
 TELEGRAM_BYPASS_AUTH=false
@@ -85,6 +90,17 @@ CRON_SECRET=придумайте_сложный_пароль
 DEFAULT_EVENT_DURATION_MINUTES=30
 MAX_TRACKED_TASK_LIST_MESSAGES=100
 ```
+
+### Несколько Mini Apps на одном Telegram-боте
+
+Один Telegram-бот может иметь только один webhook и одну стандартную кнопку меню, поэтому этот проект остается главным bot-router:
+
+- `WEBAPP_URL` — основной Mini App. Именно он должен быть указан в стандартной кнопке бота через BotFather или `setChatMenuButton`.
+- `PMW_ADMIN_WEBAPP_URL` — дополнительный Mini App для панели управления PussyMoneyWeed. Он показывается отдельной кнопкой в ответе на `/start`.
+- `PMW_ADMIN_TELEGRAM_IDS` — опциональный allowlist Telegram ID. Если задан, кнопка PMW-панели показывается только этим пользователям. Сама PMW-панель дополнительно проверяет Telegram `initData` и свой `TELEGRAM_ADMIN_IDS`.
+- `TELEGRAM_WEBHOOK_SECRET` — опциональный secret token для Telegram webhook. Если задан, `/api/webhook` принимает только запросы с заголовком `x-telegram-bot-api-secret-token`.
+
+Сами сервисы лучше держать разными Vercel/GitHub проектами: `FuckinHabits` отвечает за основной Mini App и webhook бота, а `PussyMoneyWeed` остается отдельным приложением и открывается по прямой `web_app`-ссылке.
 
 ### 3. Настройка базы данных
 Выполните SQL-миграции из папки `supabase/migrations` в SQL Editor вашей панели Supabase. Это создаст необходимые таблицы (`users`, `habits`, `daily_logs`, `year_goals` и др.).

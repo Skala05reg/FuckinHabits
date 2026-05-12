@@ -1,4 +1,4 @@
-import { Bot, InlineKeyboard } from "grammy";
+import { Bot } from "grammy";
 import { calendar_v3 } from "googleapis";
 
 import { APP_CONFIG } from "@/config/app";
@@ -12,6 +12,10 @@ import { classifyMessage } from "@/lib/agent/classifier";
 import { getCalendar, GOOGLE_CALENDAR_ID } from "@/lib/google-calendar";
 import { identifyEventsToDelete } from "@/lib/agent/deleter";
 import { identifyEventToModify } from "@/lib/agent/modifier";
+import {
+  buildMiniAppKeyboard,
+  getStartMiniAppLinks,
+} from "@/lib/telegram/mini-apps";
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -47,13 +51,15 @@ export function getBot(): Bot {
     try {
         await ensureUser({ telegramId, firstName: ctx.from?.first_name });
 
-        const appUrl = process.env.WEBAPP_URL;
-        const keyboard = new InlineKeyboard();
-        if (appUrl) keyboard.webApp(BOT_CONFIG.labels.openTracker, appUrl).row();
+        const miniAppLinks = getStartMiniAppLinks(telegramId);
+        const keyboard = buildMiniAppKeyboard(miniAppLinks);
+        if (miniAppLinks.length) keyboard.row();
         keyboard.text(BOT_CONFIG.labels.showTodayTasks, BOT_CONFIG.callbacks.showTasksToday);
 
         await ctx.reply(
-        "Открой Mini App и отмечай привычки/оценки дня. Логический день длится до 04:00.",
+        miniAppLinks.length > 1
+          ? "Выбери нужный Mini App. Стандартная кнопка бота открывает трекер привычек."
+          : "Открой Mini App и отмечай привычки/оценки дня. Логический день длится до 04:00.",
         keyboard.inline_keyboard.length ? { reply_markup: keyboard } : undefined,
         );
     } catch (e) {
